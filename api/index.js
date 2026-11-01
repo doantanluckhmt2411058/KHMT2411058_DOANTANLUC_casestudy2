@@ -17,6 +17,9 @@ connectDatabase();
 const authRoutes = require('./src/routes/authRoutes');
 app.use('/api/auth', authRoutes);
 
+const taskRoutes = require('./src/routes/taskRoutes');
+app.use('/api/tasks', taskRoutes);
+
 // Kiểm tra server
 app.get('/', (req, res) => {
     res.send('Task Manager API đang hoạt động!');
