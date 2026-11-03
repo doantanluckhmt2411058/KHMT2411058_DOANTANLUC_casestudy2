@@ -95,7 +95,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Mở chi tiết và cập nhật danh sách sau khi chỉnh sửa
+  // Mở chi tiết và cập nhật danh sách sau khi sửa hoặc xóa
   Future<void> openTaskDetail(
       Map<String, dynamic> task,
       ) async {
@@ -117,18 +117,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
     );
 
-    // Nếu có dữ liệu mới sau khi chỉnh sửa thì tải lại danh sách
     if (result != null && mounted) {
       await loadTasks();
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Danh sách công việc đã được cập nhật!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (result['deleted'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Xóa công việc thành công!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Danh sách công việc đã được cập nhật!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     }
   }
 
@@ -208,7 +216,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
               elevation: 2,
               child: ListTile(
                 contentPadding: const EdgeInsets.all(12),
-
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFEDE7F6),
                   child: Icon(
@@ -216,7 +223,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     color: Colors.deepPurple,
                   ),
                 ),
-
                 title: Text(
                   task['title']?.toString() ??
                       'Không có tiêu đề',
@@ -225,37 +231,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     fontSize: 16,
                   ),
                 ),
-
                 subtitle: Column(
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 6),
-
                     Text(
                       task['description']?.toString() ??
                           'Không có mô tả',
                     ),
-
                     const SizedBox(height: 6),
-
                     Text(
                       'Trạng thái: ${statusText(task['status']?.toString())}',
                     ),
-
                     Text(
                       'Ưu tiên: ${priorityText(task['priority']?.toString())}',
                     ),
-
                     if (task['dueDate'] != null)
                       Text(
                         'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
                       ),
-
                     const SizedBox(height: 5),
-
                     const Text(
-                      'Nhấn để xem hoặc chỉnh sửa',
+                      'Nhấn để xem, chỉnh sửa hoặc xóa',
                       style: TextStyle(
                         color: Colors.deepPurple,
                         fontSize: 12,
@@ -263,12 +261,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     ),
                   ],
                 ),
-
                 trailing: const Icon(
                   Icons.chevron_right,
                   color: Colors.deepPurple,
                 ),
-
                 onTap: () => openTaskDetail(task),
               ),
             );

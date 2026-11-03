@@ -90,4 +90,32 @@ class TaskService {
       data['message'] ?? 'Không thể cập nhật công việc!',
     );
   }
+
+  // Xóa công việc
+  Future<void> deleteTask(String taskId) async {
+    final token = await _getToken();
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/$taskId'),
+      headers: _headers(token),
+    );
+
+    if (response.statusCode == 200 ||
+        response.statusCode == 204) {
+      return;
+    }
+
+    String message = 'Không thể xóa công việc!';
+
+    if (response.body.isNotEmpty) {
+      try {
+        final data = jsonDecode(response.body);
+        message = data['message'] ?? message;
+      } catch (_) {
+        // Phản hồi không phải JSON
+      }
+    }
+
+    throw Exception(message);
+  }
 }

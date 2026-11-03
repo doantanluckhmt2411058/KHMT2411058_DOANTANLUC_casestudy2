@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../services/task_service.dart';
 import 'edit_task_screen.dart';
 
 class TaskDetailScreen extends StatelessWidget {
@@ -89,6 +90,7 @@ class TaskDetailScreen extends StatelessWidget {
     return user.toString();
   }
 
+  // Chỉnh sửa công việc
   Future<void> editTask(BuildContext context) async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -99,6 +101,70 @@ class TaskDetailScreen extends StatelessWidget {
 
     if (result != null && context.mounted) {
       Navigator.pop(context, result);
+    }
+  }
+
+  // Xóa công việc
+  Future<void> deleteTask(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Xác nhận xóa'),
+          content: Text(
+            'Bạn có chắc chắn muốn xóa công việc '
+                '"${task['title'] ?? ''}" không?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Xóa'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    final taskId = task['_id']?.toString();
+
+    if (taskId == null || taskId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã công việc!'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await TaskService().deleteTask(taskId);
+
+      if (!context.mounted) return;
+
+      Navigator.pop(context, {'deleted': true});
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -114,6 +180,11 @@ class TaskDetailScreen extends StatelessWidget {
             tooltip: 'Chỉnh sửa công việc',
             icon: const Icon(Icons.edit),
             onPressed: () => editTask(context),
+          ),
+          IconButton(
+            tooltip: 'Xóa công việc',
+            icon: const Icon(Icons.delete),
+            onPressed: () => deleteTask(context),
           ),
         ],
       ),
@@ -199,6 +270,8 @@ class TaskDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+
+            // Nút chỉnh sửa
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -208,6 +281,23 @@ class TaskDetailScreen extends StatelessWidget {
                 label: const Text('Chỉnh sửa công việc'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Nút xóa
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => deleteTask(context),
+                icon: const Icon(Icons.delete),
+                label: const Text('Xóa công việc'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
                 ),
               ),
