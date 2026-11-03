@@ -27,7 +27,7 @@ class TaskService {
     };
   }
 
-  // Lấy danh sách công việc
+  // B1: Lấy danh sách công việc
   Future<List<dynamic>> getTasks() async {
     final token = await _getToken();
 
@@ -47,7 +47,7 @@ class TaskService {
     );
   }
 
-  // Lấy chi tiết công việc
+  // B2: Lấy chi tiết công việc
   Future<Map<String, dynamic>> getTaskById(String taskId) async {
     final token = await _getToken();
 
@@ -67,7 +67,7 @@ class TaskService {
     );
   }
 
-  // Chỉnh sửa công việc
+  // B4: Chỉnh sửa công việc
   Future<Map<String, dynamic>> updateTask(
       String taskId,
       Map<String, dynamic> taskData,
@@ -91,7 +91,7 @@ class TaskService {
     );
   }
 
-  // Xóa công việc
+  // B5: Xóa công việc
   Future<void> deleteTask(String taskId) async {
     final token = await _getToken();
 
@@ -117,5 +117,41 @@ class TaskService {
     }
 
     throw Exception(message);
+  }
+
+  // B6: Cập nhật trạng thái công việc
+  Future<Map<String, dynamic>> updateTaskStatus(
+      String taskId,
+      String status,
+      ) async {
+    final token = await _getToken();
+
+    final allowedStatuses = [
+      'todo',
+      'in_progress',
+      'completed',
+    ];
+
+    if (!allowedStatuses.contains(status)) {
+      throw Exception('Trạng thái công việc không hợp lệ!');
+    }
+
+    final response = await http.patch(
+      Uri.parse('$baseUrl/$taskId/status'),
+      headers: _headers(token),
+      body: jsonEncode({
+        'status': status,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(data['task']);
+    }
+
+    throw Exception(
+      data['message'] ?? 'Không thể cập nhật trạng thái công việc!',
+    );
   }
 }
