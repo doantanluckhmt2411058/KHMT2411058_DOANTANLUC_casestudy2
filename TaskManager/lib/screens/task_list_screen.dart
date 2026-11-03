@@ -1,6 +1,8 @@
+
 import 'package:flutter/material.dart';
 
 import 'task_detail_screen.dart';
+import 'add_task_screen.dart';
 import '../services/task_service.dart';
 
 class TaskListScreen extends StatefulWidget {
@@ -50,6 +52,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
+  Future<void> openAddTask() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AddTaskScreen(),
+      ),
+    );
+
+    if (mounted) {
+      loadTasks();
+    }
+  }
+
   String statusText(String? status) {
     switch (status) {
       case 'todo':
@@ -76,13 +91,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Mở giao diện chi tiết công việc B2
   Future<void> openTaskDetail(Map<String, dynamic> task) async {
     final id = task['_id']?.toString();
-
-    debugPrint('========== MỞ CHI TIẾT ==========');
-    debugPrint('TASK ID: $id');
-    debugPrint('TASK DATA: $task');
 
     if (id == null || id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -91,22 +101,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
       return;
     }
 
-    try {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) {
-            return TaskDetailScreen(task: task);
-          },
-        ),
-      );
-    } catch (e) {
-      debugPrint('LỖI ĐIỀU HƯỚNG: $e');
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Lỗi mở chi tiết: $e')));
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TaskDetailScreen(task: task),
+      ),
+    );
   }
 
   @override
@@ -117,122 +117,97 @@ class _TaskListScreenState extends State<TaskListScreen> {
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(onPressed: loadTasks, icon: const Icon(Icons.refresh)),
+          IconButton(
+            onPressed: loadTasks,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
 
-      // Nút kiểm tra mở chi tiết
       floatingActionButton: FloatingActionButton.extended(
+        onPressed: openAddTask,
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
-        onPressed: isLoading || tasks.isEmpty
-            ? null
-            : () {
-                final task = Map<String, dynamic>.from(tasks.first);
-                openTaskDetail(task);
-              },
-        icon: const Icon(Icons.open_in_new),
-        label: const Text('Thử mở chi tiết'),
+        icon: const Icon(Icons.add),
+        label: const Text('Thêm công việc'),
       ),
 
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
           ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(errorMessage!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: loadTasks,
-                      child: const Text('Thử lại'),
-                    ),
-                  ],
-                ),
-              ),
-            )
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(errorMessage!),
+            ElevatedButton(
+              onPressed: loadTasks,
+              child: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      )
           : tasks.isEmpty
           ? const Center(child: Text('Chưa có công việc nào'))
           : RefreshIndicator(
-              onRefresh: loadTasks,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: tasks.length,
-                itemBuilder: (context, index) {
-                  final task = Map<String, dynamic>.from(tasks[index]);
+        onRefresh: loadTasks,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: tasks.length,
+          itemBuilder: (context, index) {
+            final task =
+            Map<String, dynamic>.from(tasks[index]);
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () {
-                        openTaskDetail(task);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            const CircleAvatar(
-                              backgroundColor: Color(0xFFEDE7F6),
-                              child: Icon(
-                                Icons.assignment,
-                                color: Colors.deepPurple,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    task['title']?.toString() ??
-                                        'Không có tiêu đề',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    task['description']?.toString() ??
-                                        'Không có mô tả',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Trạng thái: ${statusText(task['status']?.toString())}',
-                                  ),
-                                  Text(
-                                    'Ưu tiên: ${priorityText(task['priority']?.toString())}',
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (task['dueDate'] != null)
-                                    Text(
-                                      'Hạn hoàn thành: ${task['dueDate'].toString().length >= 10 ? task['dueDate'].toString().substring(0, 10) : task['dueDate']}',
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: Colors.deepPurple,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
+            return Card(
+              margin: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 8,
               ),
-            ),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFEDE7F6),
+                  child: Icon(
+                    Icons.assignment,
+                    color: Colors.deepPurple,
+                  ),
+                ),
+                title: Text(
+                  task['title']?.toString() ??
+                      'Không có tiêu đề',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task['description']?.toString() ??
+                          'Không có mô tả',
+                    ),
+                    Text(
+                      'Trạng thái: ${statusText(task['status']?.toString())}',
+                    ),
+                    Text(
+                      'Ưu tiên: ${priorityText(task['priority']?.toString())}',
+                    ),
+                    if (task['dueDate'] != null)
+                      Text(
+                        'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
+                      ),
+                  ],
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: Colors.deepPurple,
+                ),
+                onTap: () => openTaskDetail(task),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
