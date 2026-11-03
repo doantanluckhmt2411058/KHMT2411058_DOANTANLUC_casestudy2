@@ -1,9 +1,15 @@
+
 import 'package:flutter/material.dart';
+
+import 'edit_task_screen.dart';
 
 class TaskDetailScreen extends StatelessWidget {
   final Map<String, dynamic> task;
 
-  const TaskDetailScreen({super.key, required this.task});
+  const TaskDetailScreen({
+    super.key,
+    required this.task,
+  });
 
   String statusText(String? status) {
     switch (status) {
@@ -52,7 +58,10 @@ class TaskDetailScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -80,6 +89,19 @@ class TaskDetailScreen extends StatelessWidget {
     return user.toString();
   }
 
+  Future<void> editTask(BuildContext context) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditTaskScreen(task: task),
+      ),
+    );
+
+    if (result != null && context.mounted) {
+      Navigator.pop(context, result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -87,6 +109,13 @@ class TaskDetailScreen extends StatelessWidget {
         title: const Text('Chi tiết công việc'),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Chỉnh sửa công việc',
+            icon: const Icon(Icons.edit),
+            onPressed: () => editTask(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -116,7 +145,9 @@ class TaskDetailScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(task['description']?.toString() ?? 'Không có mô tả'),
+                    Text(
+                      task['description']?.toString() ?? 'Không có mô tả',
+                    ),
                   ],
                 ),
               ),
@@ -164,6 +195,20 @@ class TaskDetailScreen extends StatelessWidget {
                       Icons.assignment_ind,
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => editTask(context),
+                icon: const Icon(Icons.edit),
+                label: const Text('Chỉnh sửa công việc'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ),

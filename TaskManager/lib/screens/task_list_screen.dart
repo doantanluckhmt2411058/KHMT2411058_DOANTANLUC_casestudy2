@@ -25,6 +25,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     loadTasks();
   }
 
+  // Tải danh sách công việc
   Future<void> loadTasks() async {
     if (!mounted) return;
 
@@ -52,6 +53,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
+  // Mở màn hình thêm công việc
   Future<void> openAddTask() async {
     await Navigator.push(
       context,
@@ -61,10 +63,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
 
     if (mounted) {
-      loadTasks();
+      await loadTasks();
     }
   }
 
+  // Chuyển trạng thái sang tiếng Việt
   String statusText(String? status) {
     switch (status) {
       case 'todo':
@@ -78,6 +81,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
+  // Chuyển mức độ ưu tiên sang tiếng Việt
   String priorityText(String? priority) {
     switch (priority) {
       case 'low':
@@ -91,22 +95,41 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  Future<void> openTaskDetail(Map<String, dynamic> task) async {
+  // Mở chi tiết và cập nhật danh sách sau khi chỉnh sửa
+  Future<void> openTaskDetail(
+      Map<String, dynamic> task,
+      ) async {
     final id = task['_id']?.toString();
 
     if (id == null || id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không tìm thấy ID công việc!')),
+        const SnackBar(
+          content: Text('Không tìm thấy ID công việc!'),
+        ),
       );
       return;
     }
 
-    await Navigator.push(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => TaskDetailScreen(task: task),
       ),
     );
+
+    // Nếu có dữ liệu mới sau khi chỉnh sửa thì tải lại danh sách
+    if (result != null && mounted) {
+      await loadTasks();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Danh sách công việc đã được cập nhật!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   @override
@@ -120,10 +143,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
           IconButton(
             onPressed: loadTasks,
             icon: const Icon(Icons.refresh),
+            tooltip: 'Làm mới',
           ),
         ],
       ),
 
+      // Nút thêm công việc
       floatingActionButton: FloatingActionButton.extended(
         onPressed: openAddTask,
         backgroundColor: Colors.deepPurple,
@@ -133,22 +158,39 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
 
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
           : errorMessage != null
           ? Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(errorMessage!),
-            ElevatedButton(
-              onPressed: loadTasks,
-              child: const Text('Thử lại'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 45,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: loadTasks,
+                child: const Text('Thử lại'),
+              ),
+            ],
+          ),
         ),
       )
           : tasks.isEmpty
-          ? const Center(child: Text('Chưa có công việc nào'))
+          ? const Center(
+        child: Text('Chưa có công việc nào'),
+      )
           : RefreshIndicator(
         onRefresh: loadTasks,
         child: ListView.builder(
@@ -163,7 +205,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 horizontal: 8,
                 vertical: 8,
               ),
+              elevation: 2,
               child: ListTile(
+                contentPadding: const EdgeInsets.all(12),
+
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFEDE7F6),
                   child: Icon(
@@ -171,37 +216,59 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     color: Colors.deepPurple,
                   ),
                 ),
+
                 title: Text(
                   task['title']?.toString() ??
                       'Không có tiêu đề',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
+
                 subtitle: Column(
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 6),
+
                     Text(
                       task['description']?.toString() ??
                           'Không có mô tả',
                     ),
+
+                    const SizedBox(height: 6),
+
                     Text(
                       'Trạng thái: ${statusText(task['status']?.toString())}',
                     ),
+
                     Text(
                       'Ưu tiên: ${priorityText(task['priority']?.toString())}',
                     ),
+
                     if (task['dueDate'] != null)
                       Text(
                         'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
                       ),
+
+                    const SizedBox(height: 5),
+
+                    const Text(
+                      'Nhấn để xem hoặc chỉnh sửa',
+                      style: TextStyle(
+                        color: Colors.deepPurple,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
+
                 trailing: const Icon(
                   Icons.chevron_right,
                   color: Colors.deepPurple,
                 ),
+
                 onTap: () => openTaskDetail(task),
               ),
             );
