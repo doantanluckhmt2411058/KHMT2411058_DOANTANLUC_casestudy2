@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+
 import 'task_list_screen.dart';
 import 'profile_screen.dart';
 
@@ -10,32 +11,29 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  int selectedIndex = 0;
 
-  final List<Widget> _screens = const [
-    TaskListScreen(),
-    ProfileScreen(),
-  ];
+  final List<Widget> screens = const [TaskListScreen(), ProfileScreen()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: selectedIndex, children: screens),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        currentIndex: selectedIndex,
+        onTap: (index) {
+          setState(() {
+            selectedIndex = index;
+          });
+        },
+        selectedItemColor: Colors.deepPurple,
+        unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.task_alt),
             label: 'Công việc',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Thông tin',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Thông tin'),
         ],
       ),
     );
