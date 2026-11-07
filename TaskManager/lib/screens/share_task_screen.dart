@@ -26,6 +26,9 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
   bool isLoadingShares = true;
   bool isSharing = false;
 
+  // Quyền mặc định khi chia sẻ
+  String selectedPermission = 'viewer';
+
   String getUserId(dynamic user) {
     if (user is Map) {
       return (user['_id'] ?? user['id'] ?? '').toString();
@@ -45,6 +48,10 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
       return user['email']?.toString() ?? '';
     }
     return '';
+  }
+
+  String permissionText(String permission) {
+    return permission == 'editor' ? 'Chỉnh sửa' : 'Chỉ xem';
   }
 
   @override
@@ -132,7 +139,7 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
     });
   }
 
-  // Chia sẻ cho nhiều người với quyền chỉ xem
+  // Chia sẻ công việc với quyền đã chọn
   Future<void> shareSelectedUsers() async {
     if (selectedIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -151,7 +158,7 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
       await service.shareTask(
         widget.taskId,
         selectedIds.toList(),
-        'viewer',
+        selectedPermission,
       );
 
       if (!mounted) return;
@@ -167,8 +174,10 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Chia sẻ công việc thành công!'),
+        SnackBar(
+          content: Text(
+            'Chia sẻ thành công với quyền ${permissionText(selectedPermission)}!',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -190,15 +199,142 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
     }
   }
 
-  // Kiểm tra người đã được chia sẻ chưa
+  // Kiểm tra người dùng đã được chia sẻ chưa
   bool isAlreadyShared(String userId) {
     return shares.any((share) {
-      final user = share['userId'];
-      return getUserId(user) == userId;
+      return getUserId(share['userId']) == userId;
     });
   }
 
-  // Hiển thị từng người dùng
+  // Thay đổi quyền Viewer / Editor
+  Future<void> changePermission(
+      dynamic share,
+      String newPermission,
+      ) async {
+    final shareId = share['_id']?.toString();
+
+    if (shareId == null || shareId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã chia sẻ!'),
+        ),
+      );
+      return;
+    }
+
+    final oldPermission =
+        share['permission']?.toString() ?? 'viewer';
+
+    if (oldPermission == newPermission) return;
+
+    try {
+      await service.updateSharePermission(
+        widget.taskId,
+        shareId,
+        newPermission,
+      );
+
+      if (!mounted) return;
+
+      await loadShares();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã đổi quyền thành ${permissionText(newPermission)}!',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi thay đổi quyền: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Thu hồi quyền chia sẻ
+  Future<void> removeShare(dynamic share) async {
+    final user = share['userId'];
+    final shareId = share['_id']?.toString();
+
+    if (shareId == null || shareId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã chia sẻ!'),
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Thu hồi quyền chia sẻ'),
+          content: Text(
+            'Bạn có chắc muốn thu hồi quyền của '
+                '${getUserName(user)} không?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Thu hồi'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true || !mounted) return;
+
+    try {
+      await service.removeTaskShare(widget.taskId, shareId);
+
+      if (!mounted) return;
+
+      await loadShares();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã thu hồi quyền chia sẻ!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi thu hồi quyền: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Hiển thị từng người dùng tìm được
   Widget buildUserItem(dynamic user) {
     final id = getUserId(user);
 
@@ -243,32 +379,97 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
     }
 
     if (shares.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('Chưa chia sẻ công việc cho ai.'),
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(
+            child: Text('Chưa chia sẻ công việc cho ai.'),
+          ),
+        ),
       );
     }
 
     return Column(
       children: shares.map((share) {
         final user = share['userId'];
-        final permission = share['permission']?.toString() ?? 'viewer';
+        final permission =
+            share['permission']?.toString() ?? 'viewer';
 
-        return ListTile(
-          leading: const CircleAvatar(
-            child: Icon(Icons.person),
-          ),
-          title: Text(getUserName(user)),
-          subtitle: Text(getUserEmail(user)),
-          trailing: Chip(
-            avatar: Icon(
-              permission == 'editor'
-                  ? Icons.edit
-                  : Icons.visibility,
-              size: 16,
+        return Card(
+          child: ListTile(
+            leading: const CircleAvatar(
+              child: Icon(Icons.person),
             ),
-            label: Text(
-              permission == 'editor' ? 'Chỉnh sửa' : 'Chỉ xem',
+            title: Text(getUserName(user)),
+            subtitle: Text(
+              '${getUserEmail(user)}\n'
+                  'Quyền: ${permissionText(permission)}',
+            ),
+            isThreeLine: true,
+            trailing: PopupMenuButton<String>(
+              tooltip: 'Quản lý quyền',
+              onSelected: (value) {
+                if (value == 'remove') {
+                  removeShare(share);
+                } else {
+                  changePermission(share, value);
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'viewer',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.visibility, size: 20),
+                      const SizedBox(width: 10),
+                      const Text('Cấp quyền chỉ xem'),
+                      if (permission == 'viewer') ...[
+                        const Spacer(),
+                        const Icon(
+                          Icons.check,
+                          color: Colors.green,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'editor',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.edit, size: 20),
+                      const SizedBox(width: 10),
+                      const Text('Cấp quyền chỉnh sửa'),
+                      if (permission == 'editor') ...[
+                        const Spacer(),
+                        const Icon(
+                          Icons.check,
+                          color: Colors.green,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'remove',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.person_remove,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Thu hồi quyền',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              child: const Icon(Icons.more_vert),
             ),
           ),
         );
@@ -296,6 +497,7 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+
             const SizedBox(height: 12),
 
             TextField(
@@ -322,7 +524,8 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
             ...users.map(buildUserItem),
 
             if (selectedIds.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+
               Text(
                 'Đã chọn ${selectedIds.length} người',
                 style: const TextStyle(
@@ -330,12 +533,58 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
                   color: Colors.deepPurple,
                 ),
               ),
-              const SizedBox(height: 10),
+
+              const SizedBox(height: 12),
+
+              // Chọn quyền khi chia sẻ
+              DropdownButtonFormField<String>(
+                value: selectedPermission,
+                decoration: const InputDecoration(
+                  labelText: 'Quyền truy cập',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.security),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'viewer',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility, size: 20),
+                        SizedBox(width: 10),
+                        Text('Viewer - Chỉ xem'),
+                      ],
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'editor',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20),
+                        SizedBox(width: 10),
+                        Text('Editor - Chỉnh sửa'),
+                      ],
+                    ),
+                  ),
+                ],
+                onChanged: isSharing
+                    ? null
+                    : (value) {
+                  if (value != null) {
+                    setState(() {
+                      selectedPermission = value;
+                    });
+                  }
+                },
+              ),
+
+              const SizedBox(height: 12),
+
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton.icon(
-                  onPressed: isSharing ? null : shareSelectedUsers,
+                  onPressed:
+                  isSharing ? null : shareSelectedUsers,
                   icon: isSharing
                       ? const SizedBox(
                     width: 18,
@@ -349,7 +598,7 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
                   label: Text(
                     isSharing
                         ? 'Đang chia sẻ...'
-                        : 'Chia sẻ cho những người đã chọn',
+                        : 'Chia sẻ công việc',
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
@@ -370,7 +619,19 @@ class _ShareTaskScreenState extends State<ShareTaskScreen> {
               ),
             ),
 
+            const SizedBox(height: 8),
+
+            const Text(
+              'Nhấn dấu ba chấm bên cạnh người dùng để thay đổi '
+                  'quyền hoặc thu hồi quyền chia sẻ.',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 13,
+              ),
+            ),
+
             const SizedBox(height: 12),
+
             buildShareList(),
           ],
         ),
