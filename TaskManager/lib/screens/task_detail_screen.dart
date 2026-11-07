@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../services/task_service.dart';
 import 'edit_task_screen.dart';
+import 'share_task_screen.dart';
 
 class TaskDetailScreen extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -136,8 +137,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       if (!mounted) return;
 
       setState(() {
-        currentStatus = updatedTask['status']?.toString()
-            ?? selectedStatus!;
+        currentStatus =
+            updatedTask['status']?.toString() ?? selectedStatus!;
         selectedStatus = currentStatus;
         widget.task['status'] = currentStatus;
       });
@@ -242,6 +243,29 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         ),
       );
     }
+  }
+
+  // C3: Mở màn hình chia sẻ công việc
+  Future<void> openShareTask() async {
+    final taskId = widget.task['_id']?.toString();
+
+    if (taskId == null || taskId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã công việc!'),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ShareTaskScreen(
+          taskId: taskId,
+        ),
+      ),
+    );
   }
 
   // Giao diện chọn trạng thái
@@ -373,8 +397,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      widget.task['title']?.toString()
-                          ?? 'Không có tiêu đề',
+                      widget.task['title']?.toString() ??
+                          'Không có tiêu đề',
                       style: const TextStyle(
                         fontSize: 21,
                         fontWeight: FontWeight.bold,
@@ -382,17 +406,35 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      widget.task['description']?.toString()
-                          ?? 'Không có mô tả',
+                      widget.task['description']?.toString() ??
+                          'Không có mô tả',
                     ),
                   ],
                 ),
               ),
             ),
+
             const SizedBox(height: 16),
 
             // B6: Chọn và lưu trạng thái
             statusSection(),
+
+            const SizedBox(height: 16),
+
+            // C3: Chia sẻ công việc
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: openShareTask,
+                icon: const Icon(Icons.share),
+                label: const Text('Chia sẻ công việc'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
 
             const SizedBox(height: 16),
 
@@ -410,7 +452,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     const Divider(),
                     detailItem(
                       'Mức độ ưu tiên',
-                      priorityText(widget.task['priority']?.toString()),
+                      priorityText(
+                        widget.task['priority']?.toString(),
+                      ),
                       Icons.priority_high,
                     ),
                     const Divider(),
@@ -441,6 +485,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 20),
 
             SizedBox(
@@ -456,6 +501,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 12),
 
             SizedBox(

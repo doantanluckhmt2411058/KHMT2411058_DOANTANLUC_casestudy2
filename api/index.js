@@ -13,12 +13,18 @@ app.use(express.json());
 // Kết nối MongoDB
 connectDatabase();
 
-// Kết nối API đăng ký
+// API đăng ký, đăng nhập
 const authRoutes = require('./src/routes/authRoutes');
 app.use('/api/auth', authRoutes);
-
+const userRoutes = require('./src/routes/userRoutes');
+app.use('/api/users', userRoutes);
+// API quản lý công việc B1-B7
 const taskRoutes = require('./src/routes/taskRoutes');
 app.use('/api/tasks', taskRoutes);
+
+// C1: API giao công việc
+const assignmentRoutes = require('./src/routes/assignmentRoutes');
+app.use('/api/tasks', assignmentRoutes);
 
 // Kiểm tra server
 app.get('/', (req, res) => {
