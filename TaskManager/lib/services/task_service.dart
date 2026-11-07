@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TaskService {
-  // Địa chỉ Backend
   static const String baseUrl = 'http://localhost:3000/api/tasks';
   static const String usersBaseUrl = 'http://localhost:3000/api/users';
 
@@ -43,7 +42,9 @@ class TaskService {
       return data['tasks'] ?? [];
     }
 
-    throw Exception(data['message'] ?? 'Không thể tải danh sách công việc!');
+    throw Exception(
+      data['message'] ?? 'Không thể tải danh sách công việc!',
+    );
   }
 
   // B2: Lấy chi tiết công việc
@@ -61,7 +62,9 @@ class TaskService {
       return Map<String, dynamic>.from(data['task']);
     }
 
-    throw Exception(data['message'] ?? 'Không thể tải chi tiết công việc!');
+    throw Exception(
+      data['message'] ?? 'Không thể tải chi tiết công việc!',
+    );
   }
 
   // B4: Chỉnh sửa công việc
@@ -83,7 +86,9 @@ class TaskService {
       return Map<String, dynamic>.from(data['task']);
     }
 
-    throw Exception(data['message'] ?? 'Không thể cập nhật công việc!');
+    throw Exception(
+      data['message'] ?? 'Không thể cập nhật công việc!',
+    );
   }
 
   // B5: Xóa công việc
@@ -145,7 +150,7 @@ class TaskService {
     );
   }
 
-  // C1: Tìm kiếm người dùng theo tên hoặc email
+  // C1: Tìm kiếm người dùng
   Future<List<dynamic>> searchUsers(String query) async {
     final token = await _getToken();
 
@@ -164,20 +169,36 @@ class TaskService {
       return data['users'] ?? [];
     }
 
-    throw Exception(data['message'] ?? 'Không thể tìm người dùng!');
+    throw Exception(
+      data['message'] ?? 'Không thể tìm người dùng!',
+    );
   }
 
-  // C1: Giao công việc cho một hoặc nhiều người
+  // C1: Giao công việc và chỉ định người phụ trách chính
   Future<Map<String, dynamic>> assignTask(
       String taskId,
       List<String> userIds,
+      String primaryAssigneeId,
       ) async {
     final token = await _getToken();
+
+    if (userIds.isEmpty) {
+      throw Exception('Vui lòng chọn ít nhất một thành viên!');
+    }
+
+    if (!userIds.contains(primaryAssigneeId)) {
+      throw Exception(
+        'Người phụ trách chính phải nằm trong danh sách được giao!',
+      );
+    }
 
     final response = await http.post(
       Uri.parse('$baseUrl/$taskId/assignees'),
       headers: _headers(token),
-      body: jsonEncode({'userIds': userIds}),
+      body: jsonEncode({
+        'userIds': userIds,
+        'primaryAssigneeId': primaryAssigneeId,
+      }),
     );
 
     final data = jsonDecode(response.body);
@@ -186,7 +207,9 @@ class TaskService {
       return Map<String, dynamic>.from(data);
     }
 
-    throw Exception(data['message'] ?? 'Giao công việc thất bại!');
+    throw Exception(
+      data['message'] ?? 'Giao công việc thất bại!',
+    );
   }
 
   // C1: Xem danh sách người được giao
@@ -207,5 +230,121 @@ class TaskService {
     throw Exception(
       data['message'] ?? 'Không thể lấy danh sách người được giao!',
     );
+  }
+
+  // ============================
+  // C2: CHIA SẺ CÔNG VIỆC
+  // ============================
+
+  // C2.1: Lấy danh sách người được chia sẻ
+  Future<List<dynamic>> getTaskShares(String taskId) async {
+    final token = await _getToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/$taskId/shares'),
+      headers: _headers(token),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data['shares'] ?? [];
+    }
+
+    throw Exception(
+      data['message'] ?? 'Không thể lấy danh sách chia sẻ!',
+    );
+  }
+
+  // C2.2: Chia sẻ công việc
+  // permission: viewer hoặc editor
+  Future<Map<String, dynamic>> shareTask(
+      String taskId,
+      List<String> userIds,
+      String permission,
+      ) async {
+    final token = await _getToken();
+
+    if (!['viewer', 'editor'].contains(permission)) {
+      throw Exception('Quyền chia sẻ không hợp lệ!');
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/$taskId/shares'),
+      headers: _headers(token),
+      body: jsonEncode({
+        'userIds': userIds,
+        'permission': permission,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return Map<String, dynamic>.from(data);
+    }
+
+    throw Exception(
+      data['message'] ?? 'Chia sẻ công việc thất bại!',
+    );
+  }
+
+  // C2.3: Thay đổi quyền chia sẻ
+  Future<Map<String, dynamic>> updateSharePermission(
+      String taskId,
+      String shareId,
+      String permission,
+      ) async {
+    final token = await _getToken();
+
+    if (!['viewer', 'editor'].contains(permission)) {
+      throw Exception('Quyền chia sẻ không hợp lệ!');
+    }
+
+    final response = await http.patch(
+      Uri.parse('$baseUrl/$taskId/shares/$shareId'),
+      headers: _headers(token),
+      body: jsonEncode({
+        'permission': permission,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(data);
+    }
+
+    throw Exception(
+      data['message'] ?? 'Không thể thay đổi quyền!',
+    );
+  }
+
+  // C2.4: Thu hồi quyền chia sẻ
+  Future<void> removeTaskShare(
+      String taskId,
+      String shareId,
+      ) async {
+    final token = await _getToken();
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/$taskId/shares/$shareId'),
+      headers: _headers(token),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+
+    String message = 'Không thể thu hồi quyền chia sẻ!';
+
+    if (response.body.isNotEmpty) {
+      try {
+        final data = jsonDecode(response.body);
+        message = data['message'] ?? message;
+      } catch (_) {}
+    }
+
+    throw Exception(message);
   }
 }
