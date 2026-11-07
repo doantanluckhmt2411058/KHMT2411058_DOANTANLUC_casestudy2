@@ -1,11 +1,12 @@
 ﻿
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TaskService {
+  // Địa chỉ Backend
   static const String baseUrl = 'http://localhost:3000/api/tasks';
+  static const String usersBaseUrl = 'http://localhost:3000/api/users';
 
   // Lấy token đăng nhập
   Future<String> _getToken() async {
@@ -42,9 +43,7 @@ class TaskService {
       return data['tasks'] ?? [];
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể tải danh sách công việc!',
-    );
+    throw Exception(data['message'] ?? 'Không thể tải danh sách công việc!');
   }
 
   // B2: Lấy chi tiết công việc
@@ -62,9 +61,7 @@ class TaskService {
       return Map<String, dynamic>.from(data['task']);
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể tải chi tiết công việc!',
-    );
+    throw Exception(data['message'] ?? 'Không thể tải chi tiết công việc!');
   }
 
   // B4: Chỉnh sửa công việc
@@ -86,9 +83,7 @@ class TaskService {
       return Map<String, dynamic>.from(data['task']);
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể cập nhật công việc!',
-    );
+    throw Exception(data['message'] ?? 'Không thể cập nhật công việc!');
   }
 
   // B5: Xóa công việc
@@ -100,8 +95,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    if (response.statusCode == 200 ||
-        response.statusCode == 204) {
+    if (response.statusCode == 200 || response.statusCode == 204) {
       return;
     }
 
@@ -111,9 +105,7 @@ class TaskService {
       try {
         final data = jsonDecode(response.body);
         message = data['message'] ?? message;
-      } catch (_) {
-        // Phản hồi không phải JSON
-      }
+      } catch (_) {}
     }
 
     throw Exception(message);
@@ -126,7 +118,7 @@ class TaskService {
       ) async {
     final token = await _getToken();
 
-    final allowedStatuses = [
+    const allowedStatuses = [
       'todo',
       'in_progress',
       'completed',
@@ -139,9 +131,7 @@ class TaskService {
     final response = await http.patch(
       Uri.parse('$baseUrl/$taskId/status'),
       headers: _headers(token),
-      body: jsonEncode({
-        'status': status,
-      }),
+      body: jsonEncode({'status': status}),
     );
 
     final data = jsonDecode(response.body);
@@ -152,6 +142,70 @@ class TaskService {
 
     throw Exception(
       data['message'] ?? 'Không thể cập nhật trạng thái công việc!',
+    );
+  }
+
+  // C1: Tìm kiếm người dùng theo tên hoặc email
+  Future<List<dynamic>> searchUsers(String query) async {
+    final token = await _getToken();
+
+    final uri = Uri.parse(
+      '$usersBaseUrl/search?q=${Uri.encodeQueryComponent(query)}',
+    );
+
+    final response = await http.get(
+      uri,
+      headers: _headers(token),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data['users'] ?? [];
+    }
+
+    throw Exception(data['message'] ?? 'Không thể tìm người dùng!');
+  }
+
+  // C1: Giao công việc cho một hoặc nhiều người
+  Future<Map<String, dynamic>> assignTask(
+      String taskId,
+      List<String> userIds,
+      ) async {
+    final token = await _getToken();
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/$taskId/assignees'),
+      headers: _headers(token),
+      body: jsonEncode({'userIds': userIds}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(data);
+    }
+
+    throw Exception(data['message'] ?? 'Giao công việc thất bại!');
+  }
+
+  // C1: Xem danh sách người được giao
+  Future<List<dynamic>> getTaskAssignees(String taskId) async {
+    final token = await _getToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/$taskId/assignees'),
+      headers: _headers(token),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data['assignees'] ?? [];
+    }
+
+    throw Exception(
+      data['message'] ?? 'Không thể lấy danh sách người được giao!',
     );
   }
 }

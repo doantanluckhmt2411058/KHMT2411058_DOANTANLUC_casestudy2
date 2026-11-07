@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'task_detail_screen.dart';
 import 'add_task_screen.dart';
+import 'assign_task_screen.dart';
 import '../services/task_service.dart';
 
 class TaskListScreen extends StatefulWidget {
@@ -73,6 +74,20 @@ class _TaskListScreenState extends State<TaskListScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => const AddTaskScreen(),
+      ),
+    );
+
+    if (mounted) {
+      await loadTasks();
+    }
+  }
+
+  // Mở màn hình giao việc C1
+  Future<void> openAssignTask(String taskId) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AssignTaskScreen(taskId: taskId),
       ),
     );
 
@@ -161,7 +176,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
     if (assigneeFilter != 'all') {
       result = result.where((task) {
         final primaryId = getAssigneeId(task['primaryAssigneeId']);
-
         final assignees = task['assigneeIds'];
 
         final hasAssignee = assignees is List &&
@@ -197,10 +211,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
             'low': 3,
           };
 
-          final priorityA =
-              priorityOrder[a['priority']] ?? 4;
-          final priorityB =
-              priorityOrder[b['priority']] ?? 4;
+          final priorityA = priorityOrder[a['priority']] ?? 4;
+          final priorityB = priorityOrder[b['priority']] ?? 4;
 
           return priorityA.compareTo(priorityB);
 
@@ -277,9 +289,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   // Mở chi tiết công việc
-  Future<void> openTaskDetail(
-      Map<String, dynamic> task,
-      ) async {
+  Future<void> openTaskDetail(Map<String, dynamic> task) async {
     final id = task['_id']?.toString();
 
     if (id == null || id.isEmpty) {
@@ -319,7 +329,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
         );
       }
     } else if (mounted) {
-      // Tải lại để nhận trạng thái mới nhất
       await loadTasks();
     }
   }
@@ -538,6 +547,118 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
+  // Thẻ công việc
+  Widget taskCard(Map<String, dynamic> task) {
+    final taskId = task['_id']?.toString() ?? '';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 8,
+      ),
+      elevation: 2,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+
+        leading: const CircleAvatar(
+          backgroundColor: Color(0xFFEDE7F6),
+          child: Icon(
+            Icons.assignment,
+            color: Colors.deepPurple,
+          ),
+        ),
+
+        title: Text(
+          task['title']?.toString() ?? 'Không có tiêu đề',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 6),
+            Text(
+              task['description']?.toString() ?? 'Không có mô tả',
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Trạng thái: ${statusText(task['status']?.toString())}',
+            ),
+            Text(
+              'Ưu tiên: ${priorityText(task['priority']?.toString())}',
+            ),
+            if (task['dueDate'] != null)
+              Text(
+                'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
+              ),
+            const SizedBox(height: 5),
+            const Text(
+              'Nhấn để xem, chỉnh sửa hoặc xóa',
+              style: TextStyle(
+                color: Colors.deepPurple,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+
+        // Menu thao tác
+        trailing: PopupMenuButton<String>(
+          icon: const Icon(
+            Icons.more_vert,
+            color: Colors.deepPurple,
+          ),
+          onSelected: (value) {
+            if (taskId.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Không tìm thấy ID công việc!'),
+                ),
+              );
+              return;
+            }
+
+            if (value == 'assign') {
+              openAssignTask(taskId);
+            } else if (value == 'detail') {
+              openTaskDetail(task);
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'detail',
+              child: Row(
+                children: [
+                  Icon(Icons.visibility),
+                  SizedBox(width: 8),
+                  Text('Xem chi tiết'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'assign',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.group_add,
+                    color: Colors.deepPurple,
+                  ),
+                  SizedBox(width: 8),
+                  Text('Giao việc'),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        onTap: () => openTaskDetail(task),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayedTasks = filteredTasks;
@@ -599,22 +720,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
-            // Tìm kiếm
             searchSection(),
-
             const SizedBox(height: 12),
-
-            // Lọc
             filterSection(),
-
             const SizedBox(height: 12),
-
-            // Sắp xếp
             sortSection(),
-
             const SizedBox(height: 16),
 
-            // Số lượng kết quả
             Text(
               'Tìm thấy ${displayedTasks.length} công việc',
               style: const TextStyle(
@@ -641,70 +753,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
               )
             else
               ...displayedTasks.map((item) {
-                final task =
-                Map<String, dynamic>.from(item);
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 8,
-                  ),
-                  elevation: 2,
-                  child: ListTile(
-                    contentPadding:
-                    const EdgeInsets.all(12),
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFFEDE7F6),
-                      child: Icon(
-                        Icons.assignment,
-                        color: Colors.deepPurple,
-                      ),
-                    ),
-                    title: Text(
-                      task['title']?.toString() ??
-                          'Không có tiêu đề',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 6),
-                        Text(
-                          task['description']?.toString() ??
-                              'Không có mô tả',
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Trạng thái: ${statusText(task['status']?.toString())}',
-                        ),
-                        Text(
-                          'Ưu tiên: ${priorityText(task['priority']?.toString())}',
-                        ),
-                        if (task['dueDate'] != null)
-                          Text(
-                            'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
-                          ),
-                        const SizedBox(height: 5),
-                        const Text(
-                          'Nhấn để xem, chỉnh sửa hoặc xóa',
-                          style: TextStyle(
-                            color: Colors.deepPurple,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    trailing: const Icon(
-                      Icons.chevron_right,
-                      color: Colors.deepPurple,
-                    ),
-                    onTap: () => openTaskDetail(task),
-                  ),
-                );
+                final task = Map<String, dynamic>.from(item);
+                return taskCard(task);
               }),
           ],
         ),
