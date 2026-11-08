@@ -20,13 +20,63 @@ class TaskDetailScreen extends StatefulWidget {
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   late String currentStatus;
   String? selectedStatus;
+
   bool isUpdating = false;
+  bool isLoadingMembers = true;
+
+  Map<String, dynamic> members = {
+    'createdBy': null,
+    'primaryAssignee': null,
+    'assignees': [],
+    'shares': [],
+  };
 
   @override
   void initState() {
     super.initState();
+
     currentStatus = widget.task['status']?.toString() ?? 'todo';
     selectedStatus = currentStatus;
+
+    loadMembers();
+  }
+
+  // C5: Tải danh sách thành viên công việc
+  Future<void> loadMembers() async {
+    final taskId = widget.task['_id']?.toString();
+
+    if (taskId == null || taskId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          isLoadingMembers = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final result = await TaskService().getTaskMembers(taskId);
+
+      if (!mounted) return;
+
+      setState(() {
+        members = result;
+        isLoadingMembers = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingMembers = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể tải danh sách thành viên: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   String statusText(String? status) {
@@ -60,6 +110,24 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
     final value = date.toString();
     return value.length >= 10 ? value.substring(0, 10) : value;
+  }
+
+  String getUserName(dynamic user) {
+    if (user == null) return 'Chưa xác định';
+
+    if (user is Map) {
+      return user['fullName']?.toString() ?? 'Chưa xác định';
+    }
+
+    return user.toString();
+  }
+
+  String getUserEmail(dynamic user) {
+    if (user is Map) {
+      return user['email']?.toString() ?? '';
+    }
+
+    return '';
   }
 
   Widget detailItem(String title, String value, IconData icon) {
@@ -97,14 +165,182 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
-  String getUserName(dynamic user) {
-    if (user == null) return 'Chưa xác định';
+  // C5: Hiển thị thông tin một thành viên
+  Widget memberTile({
+    required dynamic user,
+    required IconData icon,
+    String? subtitle,
+    Color color = Colors.deepPurple,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 2,
+      ),
+      leading: CircleAvatar(
+        backgroundColor: color.withAlpha(25),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
+        getUserName(user),
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+      ),
+      subtitle: subtitle != null && subtitle.isNotEmpty
+          ? Text(subtitle)
+          : null,
+    );
+  }
 
-    if (user is Map) {
-      return user['fullName']?.toString() ?? 'Chưa xác định';
-    }
+  // C5: Hiển thị danh sách người được giao
+  Widget assigneeSection() {
+    final assignees = members['assignees'] as List? ?? [];
 
-    return user.toString();
+    final primaryAssignee = members['primaryAssignee'];
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(
+                  Icons.assignment_ind,
+                  color: Colors.deepPurple,
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'NGƯỜI ĐƯỢC GIAO',
+                  style: TextStyle(
+                    color: Colors.deepPurple,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            const Text(
+              'Người phụ trách chính',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
+            ),
+
+            if (primaryAssignee != null)
+              memberTile(
+                user: primaryAssignee,
+                icon: Icons.star,
+                color: Colors.orange,
+                subtitle: getUserEmail(primaryAssignee),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text('Chưa có người phụ trách chính'),
+              ),
+
+            const Divider(),
+
+            const Text(
+              'Danh sách người được giao',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
+            ),
+
+            if (assignees.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text('Chưa có người được giao'),
+              )
+            else
+              ...assignees.map((user) {
+                return memberTile(
+                  user: user,
+                  icon: Icons.person_outline,
+                  subtitle: getUserEmail(user),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // C5: Hiển thị danh sách người được chia sẻ
+  Widget shareSection() {
+    final shares = members['shares'] as List? ?? [];
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(
+                  Icons.people_alt_outlined,
+                  color: Colors.teal,
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'NGƯỜI ĐƯỢC CHIA SẺ',
+                  style: TextStyle(
+                    color: Colors.teal,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            if (shares.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text('Chưa chia sẻ công việc với ai'),
+              )
+            else
+              ...shares.map((share) {
+                final user = share is Map ? share['userId'] : null;
+
+                final permission =
+                share is Map
+                    ? share['permission']?.toString() ?? 'viewer'
+                    : 'viewer';
+
+                final permissionText =
+                permission == 'editor'
+                    ? 'Editor - Được xem và chỉnh sửa'
+                    : 'Viewer - Chỉ được xem';
+
+                return memberTile(
+                  user: user,
+                  icon: permission == 'editor'
+                      ? Icons.edit
+                      : Icons.visibility,
+                  color: permission == 'editor'
+                      ? Colors.blue
+                      : Colors.teal,
+                  subtitle:
+                  '${getUserEmail(user)}\n$permissionText',
+                );
+              }),
+          ],
+        ),
+      ),
+    );
   }
 
   // B6: Cập nhật trạng thái công việc
@@ -266,6 +502,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         ),
       ),
     );
+
+    // C5: Tải lại danh sách thành viên sau khi chia sẻ
+    if (mounted) {
+      setState(() {
+        isLoadingMembers = true;
+      });
+
+      await loadMembers();
+    }
   }
 
   // Giao diện chọn trạng thái
@@ -293,7 +538,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
               ],
             ),
+
             const SizedBox(height: 15),
+
             DropdownButtonFormField<String>(
               value: selectedStatus,
               decoration: const InputDecoration(
@@ -322,7 +569,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 });
               },
             ),
+
             const SizedBox(height: 15),
+
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -376,11 +625,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           ),
         ],
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Thông tin công việc
             Card(
               elevation: 2,
               child: Padding(
@@ -395,7 +646,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     const SizedBox(height: 16),
+
                     Text(
                       widget.task['title']?.toString() ??
                           'Không có tiêu đề',
@@ -404,7 +657,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     const SizedBox(height: 12),
+
                     Text(
                       widget.task['description']?.toString() ??
                           'Không có mô tả',
@@ -416,7 +671,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
             const SizedBox(height: 16),
 
-            // B6: Chọn và lưu trạng thái
+            // B6: Cập nhật trạng thái
             statusSection(),
 
             const SizedBox(height: 16),
@@ -438,6 +693,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
             const SizedBox(height: 16),
 
+            // Thông tin chi tiết
             Card(
               elevation: 2,
               child: Padding(
@@ -449,7 +705,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       statusText(currentStatus),
                       Icons.flag_outlined,
                     ),
+
                     const Divider(),
+
                     detailItem(
                       'Mức độ ưu tiên',
                       priorityText(
@@ -457,34 +715,55 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       ),
                       Icons.priority_high,
                     ),
+
                     const Divider(),
+
                     detailItem(
                       'Ngày bắt đầu',
                       formatDate(widget.task['startDate']),
                       Icons.calendar_today,
                     ),
+
                     const Divider(),
+
                     detailItem(
                       'Hạn hoàn thành',
                       formatDate(widget.task['dueDate']),
                       Icons.event,
                     ),
+
                     const Divider(),
+
                     detailItem(
                       'Người tạo',
-                      getUserName(widget.task['createdBy']),
+                      getUserName(
+                        members['createdBy'] ??
+                            widget.task['createdBy'],
+                      ),
                       Icons.person,
-                    ),
-                    const Divider(),
-                    detailItem(
-                      'Người phụ trách chính',
-                      getUserName(widget.task['primaryAssigneeId']),
-                      Icons.assignment_ind,
                     ),
                   ],
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            // C5: Danh sách thành viên
+            if (isLoadingMembers)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else ...[
+              assigneeSection(),
+
+              const SizedBox(height: 12),
+
+              shareSection(),
+            ],
 
             const SizedBox(height: 20),
 

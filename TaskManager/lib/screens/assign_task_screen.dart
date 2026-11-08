@@ -56,20 +56,25 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
   // Tải danh sách người được giao và người phụ trách chính
   Future<void> loadInitialData() async {
     try {
-      final task = await service.getTaskById(widget.taskId);
       final result = await service.getTaskAssignees(widget.taskId);
 
       if (!mounted) return;
 
-      final primary = getUserId(task['primaryAssigneeId']);
+      // API trả về Map chứa danh sách assignees
+      final List<dynamic> loadedAssignees =
+      List<dynamic>.from(result['assignees'] ?? []);
+
+      // Lấy người phụ trách chính từ API
+      final primary = getUserId(result['primaryAssignee']);
 
       setState(() {
-        assignees = result;
+        assignees = loadedAssignees;
 
         selectedIds.clear();
 
-        for (final user in result) {
+        for (final user in loadedAssignees) {
           final id = getUserId(user);
+
           if (id != null) {
             selectedIds.add(id);
           }
@@ -119,12 +124,13 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
     }
   }
 
-  // Danh sách thành viên đã chọn, kể cả khi không còn trong kết quả tìm kiếm
+  // Danh sách thành viên đã chọn
   List<dynamic> get selectedUsers {
     final Map<String, dynamic> mergedUsers = {};
 
     for (final user in assignees) {
       final id = getUserId(user);
+
       if (id != null) {
         mergedUsers[id] = user;
       }
@@ -132,6 +138,7 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
 
     for (final user in users) {
       final id = getUserId(user);
+
       if (id != null) {
         mergedUsers[id] = user;
       }
@@ -168,7 +175,6 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
       if (!mounted) return;
 
       showMessage('Giao công việc thành công!');
-
     } catch (e) {
       showMessage(e.toString());
     } finally {
@@ -196,18 +202,15 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-
       appBar: AppBar(
         title: const Text('Giao công việc'),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
       ),
-
       body: loadingAssignees
           ? const Center(child: CircularProgressIndicator())
           : ListView(
         padding: const EdgeInsets.all(16),
-
         children: [
           // Tìm kiếm thành viên
           const Text(
@@ -262,7 +265,6 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
               color: Colors.white,
               child: CheckboxListTile(
                 value: isSelected,
-
                 onChanged: saving
                     ? null
                     : (value) {
@@ -278,19 +280,15 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
                     }
                   });
                 },
-
                 secondary: const CircleAvatar(
                   child: Icon(Icons.person),
                 ),
-
                 title: Text(
                   user['fullName'] ?? 'Chưa có tên',
                 ),
-
                 subtitle: Text(
                   user['email'] ?? '',
                 ),
-
                 activeColor: Colors.deepPurple,
               ),
             );
@@ -310,12 +308,11 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
           const SizedBox(height: 8),
 
           DropdownButtonFormField<String>(
-            value: selected.any(
+            initialValue: selected.any(
                   (user) => getUserId(user) == primaryId,
             )
                 ? primaryId
                 : null,
-
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.white,
@@ -328,7 +325,6 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
                 color: Colors.orange,
               ),
             ),
-
             items: selected.map<DropdownMenuItem<String>>((user) {
               final id = getUserId(user)!;
 
@@ -339,7 +335,6 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
                 ),
               );
             }).toList(),
-
             onChanged: saving || selected.isEmpty
                 ? null
                 : (value) {
@@ -356,15 +351,12 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
             height: 50,
             child: ElevatedButton.icon(
               onPressed: saving ? null : submitAssignment,
-
               icon: const Icon(Icons.assignment_turned_in),
-
               label: Text(
                 saving
                     ? 'Đang giao việc...'
                     : 'Xác nhận giao việc',
               ),
-
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
                 foregroundColor: Colors.white,
@@ -414,18 +406,15 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
                         : Colors.deepPurple,
                   ),
                 ),
-
                 title: Text(
                   user['fullName'] ?? 'Chưa có tên',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 subtitle: Text(
                   user['email'] ?? '',
                 ),
-
                 trailing: isPrimary
                     ? const Chip(
                   label: Text(

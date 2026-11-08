@@ -212,8 +212,9 @@ class TaskService {
     );
   }
 
-  // C1: Xem danh sách người được giao
-  Future<List<dynamic>> getTaskAssignees(String taskId) async {
+  // C1 và C5: Lấy thông tin người được giao
+  // Bao gồm người tạo, người phụ trách chính và danh sách người được giao
+  Future<Map<String, dynamic>> getTaskAssignees(String taskId) async {
     final token = await _getToken();
 
     final response = await http.get(
@@ -224,7 +225,7 @@ class TaskService {
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
-      return data['assignees'] ?? [];
+      return Map<String, dynamic>.from(data);
     }
 
     throw Exception(
@@ -232,11 +233,7 @@ class TaskService {
     );
   }
 
-  // ============================
-  // C2: CHIA SẺ CÔNG VIỆC
-  // ============================
-
-  // C2.1: Lấy danh sách người được chia sẻ
+  // C2: Lấy danh sách người được chia sẻ
   Future<List<dynamic>> getTaskShares(String taskId) async {
     final token = await _getToken();
 
@@ -256,7 +253,20 @@ class TaskService {
     );
   }
 
-  // C2.2: Chia sẻ công việc
+  // C5: Lấy toàn bộ danh sách thành viên công việc
+  Future<Map<String, dynamic>> getTaskMembers(String taskId) async {
+    final assigneeData = await getTaskAssignees(taskId);
+    final shares = await getTaskShares(taskId);
+
+    return {
+      'createdBy': assigneeData['createdBy'],
+      'primaryAssignee': assigneeData['primaryAssignee'],
+      'assignees': assigneeData['assignees'] ?? [],
+      'shares': shares,
+    };
+  }
+
+  // C2: Chia sẻ công việc
   // permission: viewer hoặc editor
   Future<Map<String, dynamic>> shareTask(
       String taskId,
@@ -289,7 +299,7 @@ class TaskService {
     );
   }
 
-  // C2.3: Thay đổi quyền chia sẻ
+  // C2: Thay đổi quyền chia sẻ
   Future<Map<String, dynamic>> updateSharePermission(
       String taskId,
       String shareId,
@@ -320,7 +330,7 @@ class TaskService {
     );
   }
 
-  // C2.4: Thu hồi quyền chia sẻ
+  // C2: Thu hồi quyền chia sẻ
   Future<void> removeTaskShare(
       String taskId,
       String shareId,
