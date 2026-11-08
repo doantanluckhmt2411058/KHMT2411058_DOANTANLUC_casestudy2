@@ -77,9 +77,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
     );
 
-    if (mounted) {
-      await loadTasks();
-    }
+    if (mounted) await loadTasks();
   }
 
   // Mở màn hình giao việc C1
@@ -91,9 +89,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
     );
 
-    if (mounted) {
-      await loadTasks();
-    }
+    if (mounted) await loadTasks();
   }
 
   // Chuyển trạng thái sang tiếng Việt
@@ -146,11 +142,131 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return user.toString();
   }
 
+  // Hiển thị vai trò người dùng
+  Widget roleBadges(Map<String, dynamic> task) {
+    final roles = task['myRoles'];
+
+    if (roles is! List || roles.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final Map<String, String> roleNames = {
+      'creator': 'Người tạo',
+      'assignee': 'Người được giao',
+      'shared': 'Được chia sẻ',
+    };
+
+    final Map<String, Color> roleColors = {
+      'creator': Colors.deepPurple,
+      'assignee': Colors.blue,
+      'shared': Colors.teal,
+    };
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: roles.map<Widget>((role) {
+        final key = role.toString();
+
+        return Chip(
+          label: Text(
+            roleNames[key] ?? key,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+            ),
+          ),
+          backgroundColor: roleColors[key] ?? Colors.grey,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        );
+      }).toList(),
+    );
+  }
+
+  // Hiển thị quyền chia sẻ
+  Widget sharePermissionBadge(Map<String, dynamic> task) {
+    final permission = task['mySharePermission']?.toString();
+
+    if (permission == null) {
+      return const SizedBox.shrink();
+    }
+
+    final isEditor = permission == 'editor';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Row(
+        children: [
+          Icon(
+            isEditor ? Icons.edit : Icons.visibility,
+            size: 16,
+            color: isEditor ? Colors.orange : Colors.blue,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            isEditor ? 'Quyền Editor - Được chỉnh sửa' : 'Quyền Viewer - Chỉ xem',
+            style: TextStyle(
+              fontSize: 12,
+              color: isEditor ? Colors.orange[800] : Colors.blue[800],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Hiển thị tiến độ công việc
+  Widget progressSection(Map<String, dynamic> task) {
+    final rawProgress = task['progress'];
+    final progress = rawProgress is num
+        ? rawProgress.toDouble().clamp(0.0, 100.0)
+        : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Tiến độ công việc',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                ),
+              ),
+              Text(
+                '${progress.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(
+            value: progress / 100,
+            minHeight: 7,
+            borderRadius: BorderRadius.circular(10),
+            backgroundColor: Colors.deepPurple.shade50,
+            color: Colors.deepPurple,
+          ),
+        ],
+      ),
+    );
+  }
+
   // Tìm kiếm, lọc và sắp xếp
   List<dynamic> get filteredTasks {
     List<dynamic> result = List<dynamic>.from(tasks);
 
-    // Tìm kiếm theo tên công việc
     if (searchQuery.trim().isNotEmpty) {
       result = result.where((task) {
         final title = task['title']?.toString().toLowerCase() ?? '';
@@ -158,21 +274,18 @@ class _TaskListScreenState extends State<TaskListScreen> {
       }).toList();
     }
 
-    // Lọc theo trạng thái
     if (statusFilter != 'all') {
       result = result.where((task) {
         return task['status']?.toString() == statusFilter;
       }).toList();
     }
 
-    // Lọc theo mức độ ưu tiên
     if (priorityFilter != 'all') {
       result = result.where((task) {
         return task['priority']?.toString() == priorityFilter;
       }).toList();
     }
 
-    // Lọc theo người phụ trách
     if (assigneeFilter != 'all') {
       result = result.where((task) {
         final primaryId = getAssigneeId(task['primaryAssigneeId']);
@@ -187,7 +300,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
       }).toList();
     }
 
-    // Sắp xếp công việc
     result.sort((a, b) {
       switch (sortBy) {
         case 'dueDate':
@@ -387,30 +499,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Lọc trạng thái
             DropdownButtonFormField<String>(
-              value: statusFilter,
+              initialValue: statusFilter,
               decoration: const InputDecoration(
                 labelText: 'Trạng thái',
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(
-                  value: 'all',
-                  child: Text('Tất cả trạng thái'),
-                ),
-                DropdownMenuItem(
-                  value: 'todo',
-                  child: Text('Chưa thực hiện'),
-                ),
-                DropdownMenuItem(
-                  value: 'in_progress',
-                  child: Text('Đang thực hiện'),
-                ),
-                DropdownMenuItem(
-                  value: 'completed',
-                  child: Text('Đã hoàn thành'),
-                ),
+                DropdownMenuItem(value: 'all', child: Text('Tất cả trạng thái')),
+                DropdownMenuItem(value: 'todo', child: Text('Chưa thực hiện')),
+                DropdownMenuItem(value: 'in_progress', child: Text('Đang thực hiện')),
+                DropdownMenuItem(value: 'completed', child: Text('Đã hoàn thành')),
               ],
               onChanged: (value) {
                 setState(() {
@@ -421,30 +520,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
             const SizedBox(height: 12),
 
-            // Lọc ưu tiên
             DropdownButtonFormField<String>(
-              value: priorityFilter,
+              initialValue: priorityFilter,
               decoration: const InputDecoration(
                 labelText: 'Mức độ ưu tiên',
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(
-                  value: 'all',
-                  child: Text('Tất cả mức ưu tiên'),
-                ),
-                DropdownMenuItem(
-                  value: 'low',
-                  child: Text('Thấp'),
-                ),
-                DropdownMenuItem(
-                  value: 'medium',
-                  child: Text('Trung bình'),
-                ),
-                DropdownMenuItem(
-                  value: 'high',
-                  child: Text('Cao'),
-                ),
+                DropdownMenuItem(value: 'all', child: Text('Tất cả mức ưu tiên')),
+                DropdownMenuItem(value: 'low', child: Text('Thấp')),
+                DropdownMenuItem(value: 'medium', child: Text('Trung bình')),
+                DropdownMenuItem(value: 'high', child: Text('Cao')),
               ],
               onChanged: (value) {
                 setState(() {
@@ -455,9 +541,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
             const SizedBox(height: 12),
 
-            // Lọc người phụ trách
             DropdownButtonFormField<String>(
-              value: assigneeFilter,
+              initialValue: assigneeFilter,
               decoration: const InputDecoration(
                 labelText: 'Người phụ trách',
                 border: OutlineInputBorder(),
@@ -483,7 +568,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
             const SizedBox(height: 12),
 
-            // Nút xóa bộ lọc
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
@@ -502,10 +586,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget sortSection() {
     return Row(
       children: [
-        const Icon(
-          Icons.sort,
-          color: Colors.deepPurple,
-        ),
+        const Icon(Icons.sort, color: Colors.deepPurple),
         const SizedBox(width: 8),
         const Text(
           'Sắp xếp:',
@@ -514,7 +595,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: sortBy,
+            initialValue: sortBy,
             decoration: const InputDecoration(
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 12,
@@ -580,21 +661,36 @@ class _TaskListScreenState extends State<TaskListScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 6),
+
             Text(
               task['description']?.toString() ?? 'Không có mô tả',
             ),
-            const SizedBox(height: 6),
+
+            const SizedBox(height: 8),
+
+            roleBadges(task),
+
+            sharePermissionBadge(task),
+
+            const SizedBox(height: 8),
+
             Text(
               'Trạng thái: ${statusText(task['status']?.toString())}',
             ),
+
             Text(
               'Ưu tiên: ${priorityText(task['priority']?.toString())}',
             ),
+
             if (task['dueDate'] != null)
               Text(
                 'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
               ),
+
+            progressSection(task),
+
             const SizedBox(height: 5),
+
             const Text(
               'Nhấn để xem, chỉnh sửa hoặc xóa',
               style: TextStyle(
