@@ -142,19 +142,22 @@ const createTask = async (req, res) => {
 // B1: LẤY DANH SÁCH CÔNG VIỆC
 // ============================
 
+
 const getTasks = async (req, res) => {
     try {
         const userId = req.user._id;
+        const userIdString = userId.toString();
 
-        // Tìm công việc được chia sẻ cho người dùng
-        const sharedTasks = await TaskShare.find({
+        // Lấy danh sách công việc được chia sẻ cho người dùng
+        const sharedRecords = await TaskShare.find({
             userId: userId
-        }).select('taskId');
+        }).select('taskId permission');
 
-        const sharedTaskIds = sharedTasks.map(
+        const sharedTaskIds = sharedRecords.map(
             share => share.taskId
         );
 
+        // Lấy công việc do người dùng tạo, được giao hoặc được chia sẻ
         const tasks = await Task.find({
             $or: [
                 { createdBy: userId },
@@ -167,9 +170,65 @@ const getTasks = async (req, res) => {
             .populate('primaryAssigneeId', 'fullName email avatarUrl')
             .sort({ createdAt: -1 });
 
+        // Lưu quyền chia sẻ để tra cứu nhanh
+        const shareMap = new Map();
+
+        for (const share of sharedRecords) {
+            shareMap.set(
+                share.taskId.toString(),
+                share.permission
+            );
+        }
+
+        // Bổ sung vai trò và tiến độ cho từng công việc
+        const result = tasks.map(task => {
+            const taskData = task.toObject();
+            const roles = [];
+
+            // Kiểm tra người tạo
+            if (getObjectId(task.createdBy) === userIdString) {
+                roles.push('creator');
+            }
+
+            // Kiểm tra người được giao
+            const isAssignee = task.assigneeIds.some(
+                user => getObjectId(user) === userIdString
+            );
+
+            if (isAssignee) {
+                roles.push('assignee');
+            }
+
+            // Kiểm tra người được chia sẻ
+            const sharePermission = shareMap.get(
+                task._id.toString()
+            );
+
+            if (sharePermission) {
+                roles.push('shared');
+            }
+
+            // Tính tiến độ dựa trên trạng thái
+            let progress = 0;
+
+            if (task.status === 'in_progress') {
+                progress = 50;
+            } else if (task.status === 'completed') {
+                progress = 100;
+            }
+
+            return {
+                ...taskData,
+                myRoles: roles,
+                mySharePermission: sharePermission || null,
+                progress: progress
+            };
+        });
+
         return res.status(200).json({
             message: 'Lấy danh sách công việc thành công!',
-            tasks
+            currentUserId: userIdString,
+            tasks: result
         });
 
     } catch (error) {
@@ -181,6 +240,7 @@ const getTasks = async (req, res) => {
         });
     }
 };
+
 
 // ============================
 // B2: LẤY CHI TIẾT CÔNG VIỆC
@@ -437,6 +497,7 @@ const updateTaskStatus = async (req, res) => {
 // C1: XEM NGƯỜI ĐƯỢC GIAO
 // ============================
 
+
 const getTaskAssignees = async (req, res) => {
     try {
         const { id } = req.params;
@@ -449,7 +510,8 @@ const getTaskAssignees = async (req, res) => {
 
         const task = await Task.findById(id)
             .populate('createdBy', 'fullName email avatarUrl')
-            .populate('assigneeIds', 'fullName email avatarUrl');
+            .populate('assigneeIds', 'fullName email avatarUrl')
+            .populate('primaryAssigneeId', 'fullName email avatarUrl');
 
         if (!task) {
             return res.status(404).json({
@@ -465,6 +527,8 @@ const getTaskAssignees = async (req, res) => {
 
         return res.status(200).json({
             message: 'Lấy danh sách người được giao thành công!',
+            createdBy: task.createdBy,
+            primaryAssignee: task.primaryAssigneeId,
             assignees: task.assigneeIds
         });
 
@@ -477,6 +541,7 @@ const getTaskAssignees = async (req, res) => {
         });
     }
 };
+
 
 // ============================
 // C1: GIAO CÔNG VIỆC
