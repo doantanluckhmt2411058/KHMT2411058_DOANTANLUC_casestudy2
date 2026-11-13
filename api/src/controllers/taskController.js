@@ -4,33 +4,33 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const TaskShare = require('../models/TaskShare');
 
+const {
+    sendAssignmentEmail,
+    sendShareInvitationEmail
+} = require('../services/emailService');
+
 // ============================
 // HÀM KIỂM TRA QUYỀN
 // ============================
 
-// Lấy ID dù dữ liệu đã populate hay chưa
 const getObjectId = (value) => {
     if (!value) return null;
     return (value._id || value).toString();
 };
 
-// Kiểm tra quyền xem công việc
 const canViewTask = async (task, userId) => {
     const id = userId.toString();
 
-    // Người tạo
     if (getObjectId(task.createdBy) === id) {
         return true;
     }
 
-    // Người được giao
     const isAssignee = task.assigneeIds.some(
         user => getObjectId(user) === id
     );
 
     if (isAssignee) return true;
 
-    // Người được chia sẻ
     const share = await TaskShare.findOne({
         taskId: task._id,
         userId: id
@@ -39,23 +39,19 @@ const canViewTask = async (task, userId) => {
     return !!share;
 };
 
-// Kiểm tra quyền chỉnh sửa công việc
 const canEditTask = async (task, userId) => {
     const id = userId.toString();
 
-    // Người tạo
     if (getObjectId(task.createdBy) === id) {
         return true;
     }
 
-    // Người được giao
     const isAssignee = task.assigneeIds.some(
         user => getObjectId(user) === id
     );
 
     if (isAssignee) return true;
 
-    // Người được chia sẻ với quyền Editor
     const share = await TaskShare.findOne({
         taskId: task._id,
         userId: id,
@@ -65,7 +61,6 @@ const canEditTask = async (task, userId) => {
     return !!share;
 };
 
-// Kiểm tra người tạo công việc
 const isTaskOwner = (task, userId) => {
     return getObjectId(task.createdBy) === userId.toString();
 };
@@ -92,7 +87,11 @@ const createTask = async (req, res) => {
         }
 
         const allowedPriorities = ['low', 'medium', 'high'];
-        const allowedStatuses = ['todo', 'in_progress', 'completed'];
+        const allowedStatuses = [
+            'todo',
+            'in_progress',
+            'completed'
+        ];
 
         if (priority && !allowedPriorities.includes(priority)) {
             return res.status(400).json({
@@ -142,13 +141,11 @@ const createTask = async (req, res) => {
 // B1: LẤY DANH SÁCH CÔNG VIỆC
 // ============================
 
-
 const getTasks = async (req, res) => {
     try {
         const userId = req.user._id;
         const userIdString = userId.toString();
 
-        // Lấy danh sách công việc được chia sẻ cho người dùng
         const sharedRecords = await TaskShare.find({
             userId: userId
         }).select('taskId permission');
@@ -157,7 +154,6 @@ const getTasks = async (req, res) => {
             share => share.taskId
         );
 
-        // Lấy công việc do người dùng tạo, được giao hoặc được chia sẻ
         const tasks = await Task.find({
             $or: [
                 { createdBy: userId },
@@ -170,7 +166,6 @@ const getTasks = async (req, res) => {
             .populate('primaryAssigneeId', 'fullName email avatarUrl')
             .sort({ createdAt: -1 });
 
-        // Lưu quyền chia sẻ để tra cứu nhanh
         const shareMap = new Map();
 
         for (const share of sharedRecords) {
@@ -180,17 +175,14 @@ const getTasks = async (req, res) => {
             );
         }
 
-        // Bổ sung vai trò và tiến độ cho từng công việc
         const result = tasks.map(task => {
             const taskData = task.toObject();
             const roles = [];
 
-            // Kiểm tra người tạo
             if (getObjectId(task.createdBy) === userIdString) {
                 roles.push('creator');
             }
 
-            // Kiểm tra người được giao
             const isAssignee = task.assigneeIds.some(
                 user => getObjectId(user) === userIdString
             );
@@ -199,7 +191,6 @@ const getTasks = async (req, res) => {
                 roles.push('assignee');
             }
 
-            // Kiểm tra người được chia sẻ
             const sharePermission = shareMap.get(
                 task._id.toString()
             );
@@ -208,7 +199,6 @@ const getTasks = async (req, res) => {
                 roles.push('shared');
             }
 
-            // Tính tiến độ dựa trên trạng thái
             let progress = 0;
 
             if (task.status === 'in_progress') {
@@ -221,7 +211,7 @@ const getTasks = async (req, res) => {
                 ...taskData,
                 myRoles: roles,
                 mySharePermission: sharePermission || null,
-                progress: progress
+                progress
             };
         });
 
@@ -240,7 +230,6 @@ const getTasks = async (req, res) => {
         });
     }
 };
-
 
 // ============================
 // B2: LẤY CHI TIẾT CÔNG VIỆC
@@ -331,6 +320,7 @@ const updateTask = async (req, res) => {
                     message: 'Tên công việc không được để trống!'
                 });
             }
+
             task.title = title.trim();
         }
 
@@ -352,6 +342,7 @@ const updateTask = async (req, res) => {
                     message: 'Mức độ ưu tiên không hợp lệ!'
                 });
             }
+
             task.priority = priority;
         }
 
@@ -361,6 +352,7 @@ const updateTask = async (req, res) => {
                     message: 'Trạng thái công việc không hợp lệ!'
                 });
             }
+
             task.status = status;
         }
 
@@ -407,7 +399,6 @@ const deleteTask = async (req, res) => {
             });
         }
 
-        // Chỉ người tạo mới được xóa
         if (!isTaskOwner(task, req.user._id)) {
             return res.status(403).json({
                 message: 'Chỉ người tạo công việc mới được xóa!'
@@ -415,8 +406,6 @@ const deleteTask = async (req, res) => {
         }
 
         await Task.findByIdAndDelete(id);
-
-        // Xóa luôn dữ liệu chia sẻ liên quan
         await TaskShare.deleteMany({ taskId: id });
 
         return res.status(200).json({
@@ -460,7 +449,6 @@ const updateTaskStatus = async (req, res) => {
             });
         }
 
-        // Phải tìm task trước khi kiểm tra quyền
         const task = await Task.findById(id);
 
         if (!task) {
@@ -496,7 +484,6 @@ const updateTaskStatus = async (req, res) => {
 // ============================
 // C1: XEM NGƯỜI ĐƯỢC GIAO
 // ============================
-
 
 const getTaskAssignees = async (req, res) => {
     try {
@@ -542,11 +529,9 @@ const getTaskAssignees = async (req, res) => {
     }
 };
 
-
 // ============================
 // C1: GIAO CÔNG VIỆC
 // ============================
-
 
 const assignTask = async (req, res) => {
     try {
@@ -629,6 +614,11 @@ const assignTask = async (req, res) => {
             'fullName email avatarUrl'
         );
 
+        // Gửi email thông báo giao việc cho thành viên mới
+        const previousAssigneeIds = new Set(
+            (task._previousAssigneeIds || []).map(String)
+        );
+
         return res.status(200).json({
             message: 'Giao công việc thành công!',
             assignees: task.assigneeIds,
@@ -644,7 +634,6 @@ const assignTask = async (req, res) => {
         });
     }
 };
-
 
 // ============================
 // C2: CHIA SẺ CÔNG VIỆC
@@ -695,7 +684,7 @@ const getTaskShares = async (req, res) => {
     }
 };
 
-// C2.2: Chia sẻ công việc cho một hoặc nhiều người
+// C2.2: Chia sẻ công việc và gửi email mời
 const shareTask = async (req, res) => {
     try {
         const { id } = req.params;
@@ -759,6 +748,20 @@ const shareTask = async (req, res) => {
             });
         }
 
+        const existingShares = await TaskShare.find({
+            taskId: id,
+            userId: { $in: uniqueIds }
+        }).select('userId');
+
+        const existingUserIds = new Set(
+            existingShares.map(share => share.userId.toString())
+        );
+
+        const newUsers = users.filter(
+            user => !existingUserIds.has(user._id.toString())
+        );
+
+        // Lưu hoặc cập nhật quyền chia sẻ
         for (const userId of uniqueIds) {
             await TaskShare.findOneAndUpdate(
                 {
@@ -783,6 +786,40 @@ const shareTask = async (req, res) => {
             );
         }
 
+        const inviter = await User.findById(req.user._id)
+            .select('fullName email');
+
+        const emailSummary = {
+            total: newUsers.length,
+            success: [],
+            failed: []
+        };
+
+        // Chỉ gửi email cho người lần đầu được chia sẻ
+        for (const user of newUsers) {
+            try {
+                const result = await sendShareInvitationEmail({
+                    recipient: user,
+                    task,
+                    inviter,
+                    permission
+                });
+
+                emailSummary.success.push(result);
+
+            } catch (emailError) {
+                console.error(
+                    `Lỗi gửi email mời đến ${user.email}:`,
+                    emailError.message
+                );
+
+                emailSummary.failed.push({
+                    email: user.email,
+                    error: emailError.message
+                });
+            }
+        }
+
         const shares = await TaskShare.find({ taskId: id })
             .populate('userId', 'fullName email avatarUrl')
             .populate('sharedBy', 'fullName email avatarUrl')
@@ -790,7 +827,8 @@ const shareTask = async (req, res) => {
 
         return res.status(200).json({
             message: 'Chia sẻ công việc thành công!',
-            shares
+            shares,
+            emailSummary
         });
 
     } catch (error) {
@@ -922,7 +960,7 @@ const removeTaskShare = async (req, res) => {
         console.error('Lỗi thu hồi chia sẻ:', error);
 
         return res.status(500).json({
-            message: 'Không thể thu hồi quyền chia sẻ!',
+            message: 'Không thể thu hồi chia sẻ!',
             error: error.message
         });
     }
@@ -941,8 +979,6 @@ module.exports = {
     updateTaskStatus,
     getTaskAssignees,
     assignTask,
-
-    // C2
     getTaskShares,
     shareTask,
     updateTaskShare,

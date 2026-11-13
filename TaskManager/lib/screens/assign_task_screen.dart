@@ -60,11 +60,9 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
 
       if (!mounted) return;
 
-      // API trả về Map chứa danh sách assignees
       final List<dynamic> loadedAssignees =
       List<dynamic>.from(result['assignees'] ?? []);
 
-      // Lấy người phụ trách chính từ API
       final primary = getUserId(result['primaryAssignee']);
 
       setState(() {
@@ -149,7 +147,7 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
         .toList();
   }
 
-  // Giao công việc
+  // Giao công việc và nhận kết quả gửi email
   Future<void> submitAssignment() async {
     if (selectedIds.isEmpty) {
       showMessage('Vui lòng chọn ít nhất một thành viên!');
@@ -164,7 +162,7 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
     setState(() => saving = true);
 
     try {
-      await service.assignTask(
+      final result = await service.assignTask(
         widget.taskId,
         selectedIds.toList(),
         primaryId!,
@@ -174,14 +172,247 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
 
       if (!mounted) return;
 
-      showMessage('Giao công việc thành công!');
+      final emailSummary = result['emailSummary'];
+
+      if (emailSummary is Map) {
+        showEmailSummaryDialog(
+          Map<String, dynamic>.from(emailSummary),
+        );
+      } else {
+        showMessage('Giao công việc thành công!');
+      }
     } catch (e) {
+      if (!mounted) return;
       showMessage(e.toString());
     } finally {
       if (mounted) {
         setState(() => saving = false);
       }
     }
+  }
+
+  // Hiển thị kết quả gửi email
+  void showEmailSummaryDialog(Map<String, dynamic> summary) {
+    final int total = summary['total'] is num
+        ? (summary['total'] as num).toInt()
+        : 0;
+
+    final int success = summary['success'] is num
+        ? (summary['success'] as num).toInt()
+        : 0;
+
+    final int failed = summary['failed'] is num
+        ? (summary['failed'] as num).toInt()
+        : 0;
+
+    final List<dynamic> results =
+    summary['results'] is List ? summary['results'] : [];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(
+                Icons.mark_email_read,
+                color: Colors.deepPurple,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Kết quả giao công việc',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Giao công việc đã hoàn tất.',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildEmailStat(
+                        'Tổng email',
+                        total,
+                        Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildEmailStat(
+                        'Thành công',
+                        success,
+                        Colors.green,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildEmailStat(
+                        'Thất bại',
+                        failed,
+                        Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (results.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Chi tiết gửi email',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  ...results.map((item) {
+                    final Map<String, dynamic> emailResult =
+                    Map<String, dynamic>.from(item);
+
+                    final String email =
+                        emailResult['email']?.toString() ?? 'Không rõ email';
+
+                    final String status =
+                        emailResult['status']?.toString() ?? 'unknown';
+
+                    final String message =
+                        emailResult['message']?.toString() ?? '';
+
+                    final bool isSent = status == 'sent' ||
+                        status == 'success';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isSent
+                            ? Colors.green.shade50
+                            : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            isSent
+                                ? Icons.check_circle
+                                : Icons.error,
+                            color: isSent
+                                ? Colors.green
+                                : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  email,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  isSent
+                                      ? 'Gửi thành công'
+                                      : 'Gửi thất bại',
+                                  style: TextStyle(
+                                    color: isSent
+                                        ? Colors.green.shade700
+                                        : Colors.red.shade700,
+                                  ),
+                                ),
+                                if (message.isNotEmpty)
+                                  Text(
+                                    message,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+
+                if (total == 0) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Không có email mới cần gửi. Có thể các thành viên đã được giao từ trước.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Đóng'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Thẻ thống kê email
+  Widget _buildEmailStat(
+      String label,
+      int value,
+      Color color,
+      ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        vertical: 12,
+        horizontal: 6,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value.toString(),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 
   // Hiển thị thông báo
@@ -212,7 +443,6 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
           : ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Tìm kiếm thành viên
           const Text(
             'Tìm kiếm thành viên',
             style: TextStyle(

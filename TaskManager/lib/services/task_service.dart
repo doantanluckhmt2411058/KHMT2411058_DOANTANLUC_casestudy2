@@ -27,6 +27,19 @@ class TaskService {
     };
   }
 
+  // Đọc dữ liệu JSON an toàn
+  Map<String, dynamic> _decodeResponse(http.Response response) {
+    if (response.body.isEmpty) return {};
+
+    try {
+      return Map<String, dynamic>.from(
+        jsonDecode(response.body),
+      );
+    } catch (_) {
+      throw Exception('Phản hồi từ máy chủ không hợp lệ!');
+    }
+  }
+
   // B1: Lấy danh sách công việc
   Future<List<dynamic>> getTasks() async {
     final token = await _getToken();
@@ -36,7 +49,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
       return data['tasks'] ?? [];
@@ -56,7 +69,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
       return Map<String, dynamic>.from(data['task']);
@@ -80,7 +93,7 @@ class TaskService {
       body: jsonEncode(taskData),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
       return Map<String, dynamic>.from(data['task']);
@@ -100,7 +113,8 @@ class TaskService {
       headers: _headers(token),
     );
 
-    if (response.statusCode == 200 || response.statusCode == 204) {
+    if (response.statusCode == 200 ||
+        response.statusCode == 204) {
       return;
     }
 
@@ -139,7 +153,7 @@ class TaskService {
       body: jsonEncode({'status': status}),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
       return Map<String, dynamic>.from(data['task']);
@@ -163,7 +177,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
       return data['users'] ?? [];
@@ -174,7 +188,7 @@ class TaskService {
     );
   }
 
-  // C1: Giao công việc và chỉ định người phụ trách chính
+  // C1 + C2 + D1: Giao công việc và gửi email
   Future<Map<String, dynamic>> assignTask(
       String taskId,
       List<String> userIds,
@@ -182,11 +196,14 @@ class TaskService {
       ) async {
     final token = await _getToken();
 
-    if (userIds.isEmpty) {
+    // Loại bỏ ID trùng lặp
+    final uniqueIds = userIds.toSet().toList();
+
+    if (uniqueIds.isEmpty) {
       throw Exception('Vui lòng chọn ít nhất một thành viên!');
     }
 
-    if (!userIds.contains(primaryAssigneeId)) {
+    if (!uniqueIds.contains(primaryAssigneeId)) {
       throw Exception(
         'Người phụ trách chính phải nằm trong danh sách được giao!',
       );
@@ -196,25 +213,30 @@ class TaskService {
       Uri.parse('$baseUrl/$taskId/assignees'),
       headers: _headers(token),
       body: jsonEncode({
-        'userIds': userIds,
+        'assigneeIds': uniqueIds,
+        'userIds': uniqueIds,
         'primaryAssigneeId': primaryAssigneeId,
       }),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode == 200) {
-      return Map<String, dynamic>.from(data);
+    if (response.statusCode == 200 ||
+        response.statusCode == 201) {
+      return data;
     }
 
     throw Exception(
-      data['message'] ?? 'Giao công việc thất bại!',
+      data['message'] ??
+          data['error'] ??
+          'Giao công việc thất bại!',
     );
   }
 
-  // C1 và C5: Lấy thông tin người được giao
-  // Bao gồm người tạo, người phụ trách chính và danh sách người được giao
-  Future<Map<String, dynamic>> getTaskAssignees(String taskId) async {
+  // C1 + C5: Lấy thông tin người được giao
+  Future<Map<String, dynamic>> getTaskAssignees(
+      String taskId,
+      ) async {
     final token = await _getToken();
 
     final response = await http.get(
@@ -222,10 +244,10 @@ class TaskService {
       headers: _headers(token),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
-      return Map<String, dynamic>.from(data);
+      return data;
     }
 
     throw Exception(
@@ -233,7 +255,7 @@ class TaskService {
     );
   }
 
-  // C2: Lấy danh sách người được chia sẻ
+  // C3: Lấy danh sách người được chia sẻ
   Future<List<dynamic>> getTaskShares(String taskId) async {
     final token = await _getToken();
 
@@ -242,7 +264,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
       return data['shares'] ?? [];
@@ -266,7 +288,7 @@ class TaskService {
     };
   }
 
-  // C2: Chia sẻ công việc
+  // C3: Chia sẻ công việc
   // permission: viewer hoặc editor
   Future<Map<String, dynamic>> shareTask(
       String taskId,
@@ -288,10 +310,11 @@ class TaskService {
       }),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return Map<String, dynamic>.from(data);
+    if (response.statusCode == 200 ||
+        response.statusCode == 201) {
+      return data;
     }
 
     throw Exception(
@@ -299,7 +322,7 @@ class TaskService {
     );
   }
 
-  // C2: Thay đổi quyền chia sẻ
+  // C4: Thay đổi quyền chia sẻ
   Future<Map<String, dynamic>> updateSharePermission(
       String taskId,
       String shareId,
@@ -319,10 +342,10 @@ class TaskService {
       }),
     );
 
-    final data = jsonDecode(response.body);
+    final data = _decodeResponse(response);
 
     if (response.statusCode == 200) {
-      return Map<String, dynamic>.from(data);
+      return data;
     }
 
     throw Exception(
@@ -330,7 +353,7 @@ class TaskService {
     );
   }
 
-  // C2: Thu hồi quyền chia sẻ
+  // C4: Thu hồi quyền chia sẻ
   Future<void> removeTaskShare(
       String taskId,
       String shareId,
@@ -342,7 +365,8 @@ class TaskService {
       headers: _headers(token),
     );
 
-    if (response.statusCode == 200 || response.statusCode == 204) {
+    if (response.statusCode == 200 ||
+        response.statusCode == 204) {
       return;
     }
 
