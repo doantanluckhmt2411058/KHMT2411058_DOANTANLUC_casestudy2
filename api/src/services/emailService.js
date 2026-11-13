@@ -1,27 +1,15 @@
 
 const nodemailer = require('nodemailer');
 
-// Tạo kết nối SMTP
+// ============================
+// CẤU HÌNH GỬI EMAIL
+// ============================
+
 const createTransporter = () => {
-    const required = [
-        'SMTP_HOST',
-        'SMTP_PORT',
-        'SMTP_USER',
-        'SMTP_PASS'
-    ];
-
-    const missing = required.filter(key => !process.env[key]);
-
-    if (missing.length > 0) {
-        throw new Error(
-            `Thiếu cấu hình email trong file .env: ${missing.join(', ')}`
-        );
-    }
-
     return nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT),
-        secure: process.env.SMTP_SECURE === 'true',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
@@ -29,145 +17,267 @@ const createTransporter = () => {
     });
 };
 
-// Tránh lỗi khi tên hoặc nội dung có ký tự HTML
-const escapeHtml = (value = '') =>
-    String(value).replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    })[char]);
+// ============================
+// HÀM CHỐNG HTML INJECTION
+// ============================
 
-// D1: Gửi email khi giao công việc mới
+const escapeHtml = (value) => {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
+// ============================
+// D1: EMAIL KHI ĐƯỢC GIAO CÔNG VIỆC
+// ============================
+
 const sendAssignmentEmail = async ({
     recipient,
     task,
-    assigner,
-    isPrimary
+    assigner
 }) => {
-    if (!recipient || !recipient.email) {
-        throw new Error('Người nhận không có địa chỉ email!');
+    try {
+        if (!recipient?.email) {
+            throw new Error('Người nhận không có địa chỉ email!');
+        }
+
+        const transporter = createTransporter();
+
+        const recipientName = escapeHtml(recipient.fullName || '');
+        const assignerName = escapeHtml(assigner?.fullName || 'Người dùng');
+        const taskTitle = escapeHtml(task?.title || 'Công việc');
+        const description = escapeHtml(task?.description || 'Không có mô tả');
+
+        const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thông báo giao công việc</h2>
+                <p>Xin chào <strong>${recipientName}</strong>,</p>
+                <p><strong>${assignerName}</strong> vừa giao cho bạn công việc:</p>
+                <h3>${taskTitle}</h3>
+                <p><strong>Mô tả:</strong> ${description}</p>
+                <p><strong>Trạng thái:</strong> Chưa thực hiện</p>
+                <p>Vui lòng đăng nhập Task Manager để xem chi tiết.</p>
+                <hr />
+                <p style="color: #777;">Email tự động từ ứng dụng quản lý công việc nhóm.</p>
+            </div>
+        `;
+
+        const info = await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: recipient.email,
+            subject: `Bạn được giao công việc: ${task?.title || 'Công việc'}`,
+            html
+        });
+
+        console.log(`D1: Gửi email giao việc thành công đến ${recipient.email}`);
+
+        return {
+            email: recipient.email,
+            messageId: info.messageId
+        };
+    } catch (error) {
+        console.error(`D1: Gửi email thất bại đến ${recipient?.email || 'không xác định'}:`, error.message);
+        throw error;
     }
-
-    const transporter = createTransporter();
-
-    const taskTitle = escapeHtml(task.title || 'Công việc mới');
-    const assignerName = escapeHtml(assigner?.fullName || 'Người dùng');
-    const description = escapeHtml(task.description || 'Không có mô tả');
-
-    const dueDate = task.dueDate
-        ? new Date(task.dueDate).toLocaleDateString('vi-VN')
-        : 'Chưa thiết lập';
-
-    const subject = `Bạn được giao công việc: ${task.title}`;
-
-    const html = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h2>Bạn có công việc mới!</h2>
-            <p>Xin chào <strong>${escapeHtml(recipient.fullName || '')}</strong>,</p>
-            <p>Bạn vừa được <strong>${assignerName}</strong> giao một công việc mới.</p>
-            <h3>${taskTitle}</h3>
-            <p><strong>Mô tả:</strong> ${description}</p>
-            <p><strong>Hạn hoàn thành:</strong> ${dueDate}</p>
-            <p><strong>Vai trò:</strong>
-                ${isPrimary ? 'Người phụ trách chính' : 'Người được giao'}
-            </p>
-            <p>Vui lòng đăng nhập ứng dụng Task Manager để xem chi tiết.</p>
-            <hr />
-            <p style="color: #777;">
-                Đây là email tự động từ ứng dụng quản lý công việc nhóm.
-            </p>
-        </div>
-    `;
-
-    const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: recipient.email,
-        subject,
-        html
-    });
-
-    return {
-        email: recipient.email,
-        messageId: info.messageId
-    };
 };
 
-// D2: Gửi email khi được mời xem hoặc tham gia công việc
+// ============================
+// D2: EMAIL KHI ĐƯỢC CHIA SẺ CÔNG VIỆC
+// ============================
+
 const sendShareInvitationEmail = async ({
     recipient,
     task,
-    inviter,
+    sender,
     permission
 }) => {
-    if (!recipient || !recipient.email) {
-        throw new Error('Người nhận không có địa chỉ email!');
+    try {
+        if (!recipient?.email) {
+            throw new Error('Người nhận không có địa chỉ email!');
+        }
+
+        const transporter = createTransporter();
+
+        const recipientName = escapeHtml(recipient.fullName || '');
+        const senderName = escapeHtml(sender?.fullName || 'Người dùng');
+        const taskTitle = escapeHtml(task?.title || 'Công việc');
+
+        const permissionText = permission === 'editor'
+            ? 'Chỉnh sửa công việc'
+            : 'Chỉ xem công việc';
+
+        const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thông báo chia sẻ công việc</h2>
+                <p>Xin chào <strong>${recipientName}</strong>,</p>
+                <p><strong>${senderName}</strong> vừa chia sẻ công việc với bạn:</p>
+                <h3>${taskTitle}</h3>
+                <p>
+                    <strong>Quyền được cấp:</strong>
+                    ${permissionText}
+                </p>
+                <p>Vui lòng đăng nhập Task Manager để xem công việc được chia sẻ.</p>
+                <hr />
+                <p style="color: #777;">Email tự động từ ứng dụng quản lý công việc nhóm.</p>
+            </div>
+        `;
+
+        const info = await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: recipient.email,
+            subject: `Bạn được chia sẻ công việc: ${task?.title || 'Công việc'}`,
+            html
+        });
+
+        console.log(`D2: Gửi email chia sẻ thành công đến ${recipient.email}`);
+
+        return {
+            email: recipient.email,
+            messageId: info.messageId
+        };
+    } catch (error) {
+        console.error(`D2: Gửi email thất bại đến ${recipient?.email || 'không xác định'}:`, error.message);
+        throw error;
     }
-
-    const transporter = createTransporter();
-
-    const taskTitle = escapeHtml(task.title || 'Công việc');
-    const inviterName = escapeHtml(inviter?.fullName || 'Người dùng');
-    const description = escapeHtml(task.description || 'Không có mô tả');
-
-    const roleText = permission === 'editor'
-        ? 'Được phép xem và chỉnh sửa công việc'
-        : 'Chỉ được phép xem công việc';
-
-    const dueDate = task.dueDate
-        ? new Date(task.dueDate).toLocaleDateString('vi-VN')
-        : 'Chưa thiết lập';
-
-    const subject = `Bạn được mời tham gia công việc: ${task.title}`;
-
-    const html = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h2>Bạn nhận được lời mời tham gia công việc!</h2>
-
-            <p>
-                Xin chào
-                <strong>${escapeHtml(recipient.fullName || '')}</strong>,
-            </p>
-
-            <p>
-                <strong>${inviterName}</strong>
-                đã chia sẻ một công việc với bạn trên Task Manager.
-            </p>
-
-            <h3>${taskTitle}</h3>
-
-            <p><strong>Mô tả:</strong> ${description}</p>
-            <p><strong>Hạn hoàn thành:</strong> ${dueDate}</p>
-            <p><strong>Quyền được cấp:</strong> ${roleText}</p>
-
-            <p>
-                Vui lòng đăng nhập ứng dụng Task Manager
-                để xem công việc được chia sẻ.
-            </p>
-
-            <hr />
-
-            <p style="color: #777;">
-                Đây là email tự động từ ứng dụng quản lý công việc nhóm.
-            </p>
-        </div>
-    `;
-
-    const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: recipient.email,
-        subject,
-        html
-    });
-
-    return {
-        email: recipient.email,
-        messageId: info.messageId
-    };
 };
+
+// ============================
+// D3: EMAIL KHI CẬP NHẬT CÔNG VIỆC
+// ============================
+
+const sendTaskUpdateEmail = async ({
+    recipient,
+    task,
+    updater,
+    changes
+}) => {
+    try {
+        if (!recipient?.email) {
+            throw new Error('Người nhận không có địa chỉ email!');
+        }
+
+        if (!Array.isArray(changes) || changes.length === 0) {
+            return null;
+        }
+
+        const transporter = createTransporter();
+
+        const recipientName = escapeHtml(recipient.fullName || '');
+        const updaterName = escapeHtml(updater?.fullName || 'Người dùng');
+        const taskTitle = escapeHtml(task?.title || 'Công việc');
+
+        const changesHtml = changes.map(change => `
+            <li style="margin-bottom: 12px;">
+                <strong>${escapeHtml(change.label || change.field || 'Thông tin')}:</strong>
+                <br />
+                <span style="color: #777;">
+                    Trước: ${escapeHtml(change.oldValue ?? 'Không có')}
+                </span>
+                <br />
+                <span style="color: #16803c;">
+                    Sau: ${escapeHtml(change.newValue ?? 'Không có')}
+                </span>
+            </li>
+        `).join('');
+
+        const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thông báo cập nhật công việc</h2>
+                <p>Xin chào <strong>${recipientName}</strong>,</p>
+                <p><strong>${updaterName}</strong> vừa cập nhật công việc:</p>
+                <h3>${taskTitle}</h3>
+                <p><strong>Nội dung thay đổi:</strong></p>
+                <ul>${changesHtml}</ul>
+                <p>Vui lòng đăng nhập Task Manager để xem thông tin mới nhất.</p>
+                <hr />
+                <p style="color: #777;">Email tự động từ ứng dụng quản lý công việc nhóm.</p>
+            </div>
+        `;
+
+        const info = await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: recipient.email,
+            subject: `Công việc đã được cập nhật: ${task?.title || 'Công việc'}`,
+            html
+        });
+
+        console.log(`D3: Gửi email cập nhật thành công đến ${recipient.email}`);
+
+        return {
+            email: recipient.email,
+            messageId: info.messageId
+        };
+    } catch (error) {
+        console.error(`D3: Gửi email cập nhật thất bại đến ${recipient?.email || 'không xác định'}:`, error.message);
+        throw error;
+    }
+};
+
+// ============================
+// D4: EMAIL KHI CÔNG VIỆC HOÀN THÀNH
+// ============================
+
+const sendTaskCompletedEmail = async ({
+    recipient,
+    task,
+    completer
+}) => {
+    try {
+        if (!recipient?.email) {
+            throw new Error('Người nhận không có địa chỉ email!');
+        }
+
+        const transporter = createTransporter();
+
+        const recipientName = escapeHtml(recipient.fullName || '');
+        const completerName = escapeHtml(completer?.fullName || 'Người dùng');
+        const taskTitle = escapeHtml(task?.title || 'Công việc');
+
+        const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thông báo hoàn thành công việc</h2>
+                <p>Xin chào <strong>${recipientName}</strong>,</p>
+                <p><strong>${completerName}</strong> vừa hoàn thành công việc:</p>
+                <h3>${taskTitle}</h3>
+                <p>
+                    Trạng thái công việc:
+                    <strong style="color: #16803c;">Đã hoàn thành</strong>
+                </p>
+                <p>Vui lòng đăng nhập Task Manager để xem chi tiết.</p>
+                <hr />
+                <p style="color: #777;">Email tự động từ ứng dụng quản lý công việc nhóm.</p>
+            </div>
+        `;
+
+        const info = await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: recipient.email,
+            subject: `Công việc đã hoàn thành: ${task?.title || 'Công việc'}`,
+            html
+        });
+
+        console.log(`D4: Gửi email hoàn thành thành công đến ${recipient.email}`);
+
+        return {
+            email: recipient.email,
+            messageId: info.messageId
+        };
+    } catch (error) {
+        console.error(`D4: Gửi email thất bại đến ${recipient?.email || 'không xác định'}:`, error.message);
+        throw error;
+    }
+};
+
+// ============================
+// EXPORT
+// ============================
 
 module.exports = {
     sendAssignmentEmail,
-    sendShareInvitationEmail
+    sendShareInvitationEmail,
+    sendTaskUpdateEmail,
+    sendTaskCompletedEmail
 };
