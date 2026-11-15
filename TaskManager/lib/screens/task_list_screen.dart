@@ -1,6 +1,6 @@
-
 import 'package:flutter/material.dart';
 
+import 'reminder_settings_screen.dart';
 import 'task_detail_screen.dart';
 import 'add_task_screen.dart';
 import 'assign_task_screen.dart';
@@ -72,9 +72,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> openAddTask() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const AddTaskScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const AddTaskScreen()),
     );
 
     if (mounted) await loadTasks();
@@ -84,9 +82,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> openAssignTask(String taskId) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => AssignTaskScreen(taskId: taskId),
-      ),
+      MaterialPageRoute(builder: (context) => AssignTaskScreen(taskId: taskId)),
     );
 
     if (mounted) await loadTasks();
@@ -171,10 +167,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         return Chip(
           label: Text(
             roleNames[key] ?? key,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 11),
           ),
           backgroundColor: roleColors[key] ?? Colors.grey,
           visualDensity: VisualDensity.compact,
@@ -206,7 +199,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
           const SizedBox(width: 5),
           Text(
-            isEditor ? 'Quyền Editor - Được chỉnh sửa' : 'Quyền Viewer - Chỉ xem',
+            isEditor
+                ? 'Quyền Editor - Được chỉnh sửa'
+                : 'Quyền Viewer - Chỉ xem',
             style: TextStyle(
               fontSize: 12,
               color: isEditor ? Colors.orange[800] : Colors.blue[800],
@@ -235,10 +230,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             children: [
               const Text(
                 'Tiến độ công việc',
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 12,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
               ),
               Text(
                 '${progress.toStringAsFixed(0)}%',
@@ -291,7 +283,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
         final primaryId = getAssigneeId(task['primaryAssigneeId']);
         final assignees = task['assigneeIds'];
 
-        final hasAssignee = assignees is List &&
+        final hasAssignee =
+            assignees is List &&
             assignees.any((user) {
               return getAssigneeId(user) == assigneeFilter;
             });
@@ -303,12 +296,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     result.sort((a, b) {
       switch (sortBy) {
         case 'dueDate':
-          final dateA = DateTime.tryParse(
-            a['dueDate']?.toString() ?? '',
-          );
-          final dateB = DateTime.tryParse(
-            b['dueDate']?.toString() ?? '',
-          );
+          final dateA = DateTime.tryParse(a['dueDate']?.toString() ?? '');
+          final dateB = DateTime.tryParse(b['dueDate']?.toString() ?? '');
 
           if (dateA == null && dateB == null) return 0;
           if (dateA == null) return 1;
@@ -317,11 +306,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           return dateA.compareTo(dateB);
 
         case 'priority':
-          const priorityOrder = {
-            'high': 1,
-            'medium': 2,
-            'low': 3,
-          };
+          const priorityOrder = {'high': 1, 'medium': 2, 'low': 3};
 
           final priorityA = priorityOrder[a['priority']] ?? 4;
           final priorityB = priorityOrder[b['priority']] ?? 4;
@@ -330,12 +315,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
         case 'createdAt':
         default:
-          final dateA = DateTime.tryParse(
-            a['createdAt']?.toString() ?? '',
-          );
-          final dateB = DateTime.tryParse(
-            b['createdAt']?.toString() ?? '',
-          );
+          final dateA = DateTime.tryParse(a['createdAt']?.toString() ?? '');
+          final dateB = DateTime.tryParse(b['createdAt']?.toString() ?? '');
 
           if (dateA == null && dateB == null) return 0;
           if (dateA == null) return 1;
@@ -381,10 +362,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
 
     return uniqueUsers.entries
-        .map((entry) => {
-      'id': entry.key,
-      'name': entry.value,
-    })
+        .map((entry) => {'id': entry.key, 'name': entry.value})
         .toList();
   }
 
@@ -406,18 +384,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     if (id == null || id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không tìm thấy ID công việc!'),
-        ),
+        const SnackBar(content: Text('Không tìm thấy ID công việc!')),
       );
       return;
     }
 
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(
-        builder: (context) => TaskDetailScreen(task: task),
-      ),
+      MaterialPageRoute(builder: (context) => TaskDetailScreen(task: task)),
     );
 
     if (result != null && mounted) {
@@ -454,18 +428,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
         prefixIcon: const Icon(Icons.search),
         suffixIcon: searchQuery.isNotEmpty
             ? IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () {
-            searchController.clear();
-            setState(() {
-              searchQuery = '';
-            });
-          },
-        )
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  searchController.clear();
+                  setState(() {
+                    searchQuery = '';
+                  });
+                },
+              )
             : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       onChanged: (value) {
         setState(() {
@@ -506,10 +478,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: 'all', child: Text('Tất cả trạng thái')),
+                DropdownMenuItem(
+                  value: 'all',
+                  child: Text('Tất cả trạng thái'),
+                ),
                 DropdownMenuItem(value: 'todo', child: Text('Chưa thực hiện')),
-                DropdownMenuItem(value: 'in_progress', child: Text('Đang thực hiện')),
-                DropdownMenuItem(value: 'completed', child: Text('Đã hoàn thành')),
+                DropdownMenuItem(
+                  value: 'in_progress',
+                  child: Text('Đang thực hiện'),
+                ),
+                DropdownMenuItem(
+                  value: 'completed',
+                  child: Text('Đã hoàn thành'),
+                ),
               ],
               onChanged: (value) {
                 setState(() {
@@ -527,7 +508,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: 'all', child: Text('Tất cả mức ưu tiên')),
+                DropdownMenuItem(
+                  value: 'all',
+                  child: Text('Tất cả mức ưu tiên'),
+                ),
                 DropdownMenuItem(value: 'low', child: Text('Thấp')),
                 DropdownMenuItem(value: 'medium', child: Text('Trung bình')),
                 DropdownMenuItem(value: 'high', child: Text('Cao')),
@@ -588,19 +572,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
       children: [
         const Icon(Icons.sort, color: Colors.deepPurple),
         const SizedBox(width: 8),
-        const Text(
-          'Sắp xếp:',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        const Text('Sắp xếp:', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
             initialValue: sortBy,
             decoration: const InputDecoration(
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               border: OutlineInputBorder(),
             ),
             items: const [
@@ -633,28 +611,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final taskId = task['_id']?.toString() ?? '';
 
     return Card(
-      margin: const EdgeInsets.symmetric(
-        horizontal: 4,
-        vertical: 8,
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       elevation: 2,
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
 
         leading: const CircleAvatar(
           backgroundColor: Color(0xFFEDE7F6),
-          child: Icon(
-            Icons.assignment,
-            color: Colors.deepPurple,
-          ),
+          child: Icon(Icons.assignment, color: Colors.deepPurple),
         ),
 
         title: Text(
           task['title']?.toString() ?? 'Không có tiêu đề',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
 
         subtitle: Column(
@@ -662,9 +631,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           children: [
             const SizedBox(height: 6),
 
-            Text(
-              task['description']?.toString() ?? 'Không có mô tả',
-            ),
+            Text(task['description']?.toString() ?? 'Không có mô tả'),
 
             const SizedBox(height: 8),
 
@@ -674,13 +641,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
             const SizedBox(height: 8),
 
-            Text(
-              'Trạng thái: ${statusText(task['status']?.toString())}',
-            ),
+            Text('Trạng thái: ${statusText(task['status']?.toString())}'),
 
-            Text(
-              'Ưu tiên: ${priorityText(task['priority']?.toString())}',
-            ),
+            Text('Ưu tiên: ${priorityText(task['priority']?.toString())}'),
 
             if (task['dueDate'] != null)
               Text(
@@ -693,26 +656,18 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
             const Text(
               'Nhấn để xem, chỉnh sửa hoặc xóa',
-              style: TextStyle(
-                color: Colors.deepPurple,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.deepPurple, fontSize: 12),
             ),
           ],
         ),
 
         // Menu thao tác
         trailing: PopupMenuButton<String>(
-          icon: const Icon(
-            Icons.more_vert,
-            color: Colors.deepPurple,
-          ),
+          icon: const Icon(Icons.more_vert, color: Colors.deepPurple),
           onSelected: (value) {
             if (taskId.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Không tìm thấy ID công việc!'),
-                ),
+                const SnackBar(content: Text('Không tìm thấy ID công việc!')),
               );
               return;
             }
@@ -738,10 +693,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               value: 'assign',
               child: Row(
                 children: [
-                  Icon(
-                    Icons.group_add,
-                    color: Colors.deepPurple,
-                  ),
+                  Icon(Icons.group_add, color: Colors.deepPurple),
                   SizedBox(width: 8),
                   Text('Giao việc'),
                 ],
@@ -766,13 +718,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            onPressed: loadTasks,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Làm mới',
+            icon: const Icon(Icons.notifications_active),
+            tooltip: 'Cài đặt nhắc việc',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ReminderSettingsScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
-
       floatingActionButton: FloatingActionButton.extended(
         onPressed: openAddTask,
         backgroundColor: Colors.deepPurple,
@@ -782,79 +740,71 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
 
       body: isLoading
-          ? const Center(
-        child: CircularProgressIndicator(),
-      )
+          ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
           ? Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.red,
-                size: 45,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 45,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: loadTasks,
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                errorMessage!,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: loadTasks,
-                child: const Text('Thử lại'),
-              ),
-            ],
-          ),
-        ),
-      )
+            )
           : RefreshIndicator(
-        onRefresh: loadTasks,
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            searchSection(),
-            const SizedBox(height: 12),
-            filterSection(),
-            const SizedBox(height: 12),
-            sortSection(),
-            const SizedBox(height: 16),
+              onRefresh: loadTasks,
+              child: ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  searchSection(),
+                  const SizedBox(height: 12),
+                  filterSection(),
+                  const SizedBox(height: 12),
+                  sortSection(),
+                  const SizedBox(height: 16),
 
-            Text(
-              'Tìm thấy ${displayedTasks.length} công việc',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            if (displayedTasks.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(30),
-                child: Center(
-                  child: Text(
-                    'Không tìm thấy công việc phù hợp!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 15,
+                  Text(
+                    'Tìm thấy ${displayedTasks.length} công việc',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
                     ),
                   ),
-                ),
-              )
-            else
-              ...displayedTasks.map((item) {
-                final task = Map<String, dynamic>.from(item);
-                return taskCard(task);
-              }),
-          ],
-        ),
-      ),
+
+                  const SizedBox(height: 8),
+
+                  if (displayedTasks.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(30),
+                      child: Center(
+                        child: Text(
+                          'Không tìm thấy công việc phù hợp!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey, fontSize: 15),
+                        ),
+                      ),
+                    )
+                  else
+                    ...displayedTasks.map((item) {
+                      final task = Map<String, dynamic>.from(item);
+                      return taskCard(task);
+                    }),
+                ],
+              ),
+            ),
     );
   }
 }
