@@ -21,7 +21,8 @@ app.use('/api/users', userRoutes);
 // API quản lý công việc B1-B7
 const taskRoutes = require('./src/routes/taskRoutes');
 app.use('/api/tasks', taskRoutes);
-
+const emailLogRoutes = require('./src/routes/emailLogRoutes');
+app.use('/api/email-logs', emailLogRoutes);
 // C1: API giao công việc
 const assignmentRoutes = require('./src/routes/assignmentRoutes');
 app.use('/api/tasks', assignmentRoutes);

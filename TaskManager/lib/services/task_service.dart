@@ -381,4 +381,25 @@ class TaskService {
 
     throw Exception(message);
   }
+
+  // D6: Lấy lịch sử gửi email
+  Future<List<dynamic>> getEmailLogs() async {
+    final token = await _getToken();
+
+    final response = await http.get(
+      Uri.parse('http://localhost:3000/api/email-logs'),
+      headers: _headers(token),
+    );
+
+    final data = _decodeResponse(response);
+
+    if (response.statusCode == 200) {
+      return List<dynamic>.from(data['logs'] ?? []);
+    }
+
+    throw Exception(
+      data['message'] ?? 'Không thể tải lịch sử gửi email!',
+    );
+  }
+
 }

@@ -4,6 +4,7 @@ import 'reminder_settings_screen.dart';
 import 'task_detail_screen.dart';
 import 'add_task_screen.dart';
 import 'assign_task_screen.dart';
+import 'email_history_screen.dart';
 import '../services/task_service.dart';
 
 class TaskListScreen extends StatefulWidget {
@@ -726,6 +727,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 MaterialPageRoute(
                   builder: (_) => const ReminderSettingsScreen(),
                 ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.email),
+            tooltip: 'Lịch sử gửi email',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EmailHistoryScreen()),
               );
             },
           ),
