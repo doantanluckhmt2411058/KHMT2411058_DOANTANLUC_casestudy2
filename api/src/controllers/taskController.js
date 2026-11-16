@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const Task = require('../models/Task');
 const User = require('../models/User');
 const TaskShare = require('../models/TaskShare');
+const TaskActivity = require('../models/TaskActivity');
+
 const {
     sendAssignmentEmail,
     sendShareInvitationEmail,
@@ -11,32 +13,25 @@ const {
 } = require('../services/emailService');
 
 // ============================
-// HĂ€M KIá»‚M TRA QUYá»€N
+// KIỂM TRA QUYỀN
 // ============================
 
-// Láº¥y ID dĂ¹ dá»¯ liá»‡u Ä‘Ă£ populate hay chÆ°a
 const getObjectId = (value) => {
     if (!value) return null;
     return (value._id || value).toString();
 };
 
-// Kiá»ƒm tra quyá»n xem cĂ´ng viá»‡c
 const canViewTask = async (task, userId) => {
     const id = userId.toString();
 
-    // NgÆ°á»i táº¡o
-    if (getObjectId(task.createdBy) === id) {
-        return true;
-    }
+    if (getObjectId(task.createdBy) === id) return true;
 
-    // NgÆ°á»i Ä‘Æ°á»£c giao
     const isAssignee = task.assigneeIds.some(
         user => getObjectId(user) === id
     );
 
     if (isAssignee) return true;
 
-    // NgÆ°á»i Ä‘Æ°á»£c chia sáº»
     const share = await TaskShare.findOne({
         taskId: task._id,
         userId: id
@@ -45,23 +40,17 @@ const canViewTask = async (task, userId) => {
     return !!share;
 };
 
-// Kiá»ƒm tra quyá»n chá»‰nh sá»­a cĂ´ng viá»‡c
 const canEditTask = async (task, userId) => {
     const id = userId.toString();
 
-    // NgÆ°á»i táº¡o
-    if (getObjectId(task.createdBy) === id) {
-        return true;
-    }
+    if (getObjectId(task.createdBy) === id) return true;
 
-    // NgÆ°á»i Ä‘Æ°á»£c giao
     const isAssignee = task.assigneeIds.some(
         user => getObjectId(user) === id
     );
 
     if (isAssignee) return true;
 
-    // NgÆ°á»i Ä‘Æ°á»£c chia sáº» vá»›i quyá»n Editor
     const share = await TaskShare.findOne({
         taskId: task._id,
         userId: id,
@@ -71,10 +60,34 @@ const canEditTask = async (task, userId) => {
     return !!share;
 };
 
-// Kiá»ƒm tra ngÆ°á»i táº¡o cĂ´ng viá»‡c
 const isTaskOwner = (task, userId) => {
     return getObjectId(task.createdBy) === userId.toString();
 };
+
+// ============================
+// E4: GHI LỊCH SỬ HOẠT ĐỘNG
+// ============================
+
+const logTaskActivity = async ({
+    taskId,
+    userId,
+    action,
+    description,
+    details = {}
+}) => {
+    try {
+        await TaskActivity.create({
+            taskId,
+            userId,
+            action,
+            description,
+            details
+        });
+    } catch (error) {
+        console.error('E4: Lỗi ghi lịch sử hoạt động:', error.message);
+    }
+};
+
 // ============================
 // D4: GỬI EMAIL KHI CÔNG VIỆC HOÀN THÀNH
 // ============================
@@ -87,37 +100,26 @@ const notifyTaskCompleted = async (task, completerId) => {
     };
 
     try {
-        // Lấy danh sách người được chia sẻ
         const shares = await TaskShare.find({
             taskId: task._id
         }).select('userId');
 
-        // Gom người tạo, người được giao và người được chia sẻ
         const recipientIds = new Set();
 
         const creatorId = getObjectId(task.createdBy);
 
-        if (creatorId) {
-            recipientIds.add(creatorId);
-        }
+        if (creatorId) recipientIds.add(creatorId);
 
         for (const assignee of task.assigneeIds || []) {
             const assigneeId = getObjectId(assignee);
-
-            if (assigneeId) {
-                recipientIds.add(assigneeId);
-            }
+            if (assigneeId) recipientIds.add(assigneeId);
         }
 
         for (const share of shares) {
             const sharedUserId = getObjectId(share.userId);
-
-            if (sharedUserId) {
-                recipientIds.add(sharedUserId);
-            }
+            if (sharedUserId) recipientIds.add(sharedUserId);
         }
 
-        // Không gửi email cho người vừa hoàn thành công việc
         recipientIds.delete(completerId.toString());
 
         const recipients = await User.find({
@@ -129,7 +131,6 @@ const notifyTaskCompleted = async (task, completerId) => {
 
         emailSummary.total = recipients.length;
 
-        // Gửi email cho từng người liên quan
         for (const recipient of recipients) {
             try {
                 const result = await sendTaskCompletedEmail({
@@ -139,7 +140,6 @@ const notifyTaskCompleted = async (task, completerId) => {
                 });
 
                 emailSummary.success.push(result);
-
             } catch (emailError) {
                 console.error(
                     `D4: Lỗi gửi email đến ${recipient.email}:`,
@@ -152,15 +152,15 @@ const notifyTaskCompleted = async (task, completerId) => {
                 });
             }
         }
-
     } catch (error) {
         console.error('D4: Lỗi xử lý gửi email:', error.message);
     }
 
     return emailSummary;
 };
+
 // ============================
-// B: Táº O CĂ”NG VIá»†C
+// B: TẠO CÔNG VIỆC
 // ============================
 
 const createTask = async (req, res) => {
@@ -176,7 +176,7 @@ const createTask = async (req, res) => {
 
         if (!title || !title.trim()) {
             return res.status(400).json({
-                message: 'Vui lĂ²ng nháº­p tĂªn cĂ´ng viá»‡c!'
+                message: 'Vui lòng nhập tên công việc!'
             });
         }
 
@@ -185,13 +185,13 @@ const createTask = async (req, res) => {
 
         if (priority && !allowedPriorities.includes(priority)) {
             return res.status(400).json({
-                message: 'Má»©c Ä‘á»™ Æ°u tiĂªn khĂ´ng há»£p lá»‡!'
+                message: 'Mức độ ưu tiên không hợp lệ!'
             });
         }
 
         if (status && !allowedStatuses.includes(status)) {
             return res.status(400).json({
-                message: 'Tráº¡ng thĂ¡i cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'Trạng thái công việc không hợp lệ!'
             });
         }
 
@@ -207,46 +207,53 @@ const createTask = async (req, res) => {
             status: status || 'todo'
         });
 
+        // E4: Ghi lịch sử tạo công việc
+        await logTaskActivity({
+            taskId: task._id,
+            userId: req.user._id,
+            action: 'created',
+            description: `Đã tạo công việc "${task.title}"`,
+            details: {
+                title: task.title
+            }
+        });
+
         await task.populate(
             'createdBy',
             'fullName email avatarUrl'
         );
 
         return res.status(201).json({
-            message: 'Táº¡o cĂ´ng viá»‡c thĂ nh cĂ´ng!',
+            message: 'Tạo công việc thành công!',
             task
         });
-
     } catch (error) {
-        console.error('Lá»—i táº¡o cĂ´ng viá»‡c:', error);
+        console.error('Lỗi tạo công việc:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ táº¡o cĂ´ng viá»‡c!',
+            message: 'Không thể tạo công việc!',
             error: error.message
         });
     }
 };
 
 // ============================
-// B1: Láº¤Y DANH SĂCH CĂ”NG VIá»†C
+// B1: LẤY DANH SÁCH CÔNG VIỆC
 // ============================
-
 
 const getTasks = async (req, res) => {
     try {
         const userId = req.user._id;
         const userIdString = userId.toString();
 
-        // Láº¥y danh sĂ¡ch cĂ´ng viá»‡c Ä‘Æ°á»£c chia sáº» cho ngÆ°á»i dĂ¹ng
         const sharedRecords = await TaskShare.find({
-            userId: userId
+            userId
         }).select('taskId permission');
 
         const sharedTaskIds = sharedRecords.map(
             share => share.taskId
         );
 
-        // Láº¥y cĂ´ng viá»‡c do ngÆ°á»i dĂ¹ng táº¡o, Ä‘Æ°á»£c giao hoáº·c Ä‘Æ°á»£c chia sáº»
         const tasks = await Task.find({
             $or: [
                 { createdBy: userId },
@@ -259,7 +266,6 @@ const getTasks = async (req, res) => {
             .populate('primaryAssigneeId', 'fullName email avatarUrl')
             .sort({ createdAt: -1 });
 
-        // LÆ°u quyá»n chia sáº» Ä‘á»ƒ tra cá»©u nhanh
         const shareMap = new Map();
 
         for (const share of sharedRecords) {
@@ -269,35 +275,26 @@ const getTasks = async (req, res) => {
             );
         }
 
-        // Bá»• sung vai trĂ² vĂ  tiáº¿n Ä‘á»™ cho tá»«ng cĂ´ng viá»‡c
         const result = tasks.map(task => {
             const taskData = task.toObject();
             const roles = [];
 
-            // Kiá»ƒm tra ngÆ°á»i táº¡o
             if (getObjectId(task.createdBy) === userIdString) {
                 roles.push('creator');
             }
 
-            // Kiá»ƒm tra ngÆ°á»i Ä‘Æ°á»£c giao
             const isAssignee = task.assigneeIds.some(
                 user => getObjectId(user) === userIdString
             );
 
-            if (isAssignee) {
-                roles.push('assignee');
-            }
+            if (isAssignee) roles.push('assignee');
 
-            // Kiá»ƒm tra ngÆ°á»i Ä‘Æ°á»£c chia sáº»
             const sharePermission = shareMap.get(
                 task._id.toString()
             );
 
-            if (sharePermission) {
-                roles.push('shared');
-            }
+            if (sharePermission) roles.push('shared');
 
-            // TĂ­nh tiáº¿n Ä‘á»™ dá»±a trĂªn tráº¡ng thĂ¡i
             let progress = 0;
 
             if (task.status === 'in_progress') {
@@ -310,29 +307,27 @@ const getTasks = async (req, res) => {
                 ...taskData,
                 myRoles: roles,
                 mySharePermission: sharePermission || null,
-                progress: progress
+                progress
             };
         });
 
         return res.status(200).json({
-            message: 'Láº¥y danh sĂ¡ch cĂ´ng viá»‡c thĂ nh cĂ´ng!',
+            message: 'Lấy danh sách công việc thành công!',
             currentUserId: userIdString,
             tasks: result
         });
-
     } catch (error) {
-        console.error('Lá»—i láº¥y danh sĂ¡ch cĂ´ng viá»‡c:', error);
+        console.error('Lỗi lấy danh sách công việc:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ láº¥y danh sĂ¡ch cĂ´ng viá»‡c!',
+            message: 'Không thể lấy danh sách công việc!',
             error: error.message
         });
     }
 };
 
-
 // ============================
-// B2: Láº¤Y CHI TIáº¾T CĂ”NG VIá»†C
+// B2: LẤY CHI TIẾT CÔNG VIỆC
 // ============================
 
 const getTaskById = async (req, res) => {
@@ -341,7 +336,7 @@ const getTaskById = async (req, res) => {
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
-                message: 'ID cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'ID công việc không hợp lệ!'
             });
         }
 
@@ -352,342 +347,327 @@ const getTaskById = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!await canViewTask(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Báº¡n khĂ´ng cĂ³ quyá»n xem cĂ´ng viá»‡c nĂ y!'
+                message: 'Bạn không có quyền xem công việc này!'
             });
         }
 
         return res.status(200).json({
-            message: 'Láº¥y chi tiáº¿t cĂ´ng viá»‡c thĂ nh cĂ´ng!',
+            message: 'Lấy chi tiết công việc thành công!',
             task
         });
-
     } catch (error) {
-        console.error('Lá»—i láº¥y chi tiáº¿t cĂ´ng viá»‡c:', error);
+        console.error('Lỗi lấy chi tiết công việc:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ láº¥y chi tiáº¿t cĂ´ng viá»‡c!',
+            message: 'Không thể lấy chi tiết công việc!',
             error: error.message
         });
     }
 };
 
 // ============================
-// B4: CHá»ˆNH Sá»¬A CĂ”NG VIá»†C
+// B4: CHỈNH SỬA CÔNG VIỆC
 // ============================
 
 const updateTask = async (req, res) => {
-        try {
-            const { id } = req.params;
+    try {
+        const { id } = req.params;
 
-            if (!mongoose.Types.ObjectId.isValid(id)) {
-                return res.status(400).json({
-                    message: 'ID công việc không hợp lệ!'
-                });
-            }
-
-            const task = await Task.findById(id);
-
-            if (!task) {
-                return res.status(404).json({
-                    message: 'Không tìm thấy công việc!'
-                });
-            }
-// Lưu trạng thái cũ để kiểm tra D4
-const oldStatus = task.status;
-            if (!await canEditTask(task, req.user._id)) {
-                return res.status(403).json({
-                    message: 'Bạn không có quyền chỉnh sửa công việc này!'
-                });
-            }
-
-            const {
-                title,
-                description,
-                startDate,
-                dueDate,
-                priority,
-                status
-            } = req.body;
-
-            // Lưu thông tin cũ trước khi cập nhật
-            const oldValues = {
-                title: task.title,
-                description: task.description || '',
-                startDate: task.startDate,
-                dueDate: task.dueDate,
-                priority: task.priority
-            };
-
-            // Kiểm tra và cập nhật tên công việc
-            if (title !== undefined) {
-                if (typeof title !== 'string' || !title.trim()) {
-                    return res.status(400).json({
-                        message: 'Tên công việc không được để trống!'
-                    });
-                }
-
-                task.title = title.trim();
-            }
-
-            // Cập nhật mô tả
-            if (description !== undefined) {
-                task.description = description;
-            }
-
-            // Cập nhật ngày bắt đầu
-            if (startDate !== undefined) {
-                task.startDate = startDate || null;
-            }
-
-            // Cập nhật hạn hoàn thành
-            if (dueDate !== undefined) {
-                task.dueDate = dueDate || null;
-            }
-
-            // Kiểm tra và cập nhật độ ưu tiên
-            if (priority !== undefined) {
-                if (!['low', 'medium', 'high'].includes(priority)) {
-                    return res.status(400).json({
-                        message: 'Mức độ ưu tiên không hợp lệ!'
-                    });
-                }
-
-                task.priority = priority;
-            }
-
-            // Cập nhật trạng thái
-            // Không gửi email trạng thái ở D3 để tránh trùng D4
-            if (status !== undefined) {
-                if (!['todo', 'in_progress', 'completed'].includes(status)) {
-                    return res.status(400).json({
-                        message: 'Trạng thái công việc không hợp lệ!'
-                    });
-                }
-
-                task.status = status;
-            }
-
-            // Hàm chuyển ngày thành chuỗi để so sánh
-            const dateKey = (value) => {
-                if (!value) return '';
-
-                const date = new Date(value);
-
-                if (Number.isNaN(date.getTime())) {
-                    return String(value);
-                }
-
-                return date.toISOString();
-            };
-
-            // Hàm hiển thị ngày theo định dạng Việt Nam
-            const formatDate = (value) => {
-                if (!value) return 'Chưa thiết lập';
-
-                const date = new Date(value);
-
-                if (Number.isNaN(date.getTime())) {
-                    return String(value);
-                }
-
-                return date.toLocaleDateString('vi-VN');
-            };
-
-            const priorityLabels = {
-                low: 'Thấp',
-                medium: 'Trung bình',
-                high: 'Cao'
-            };
-
-            // Danh sách những thông tin thực sự thay đổi
-            const changes = [];
-
-            const addChange = (label, oldValue, newValue) => {
-                if (String(oldValue ?? '') !== String(newValue ?? '')) {
-                    changes.push({
-                        label,
-                        oldValue: oldValue || 'Không có',
-                        newValue: newValue || 'Không có'
-                    });
-                }
-            };
-
-            // So sánh tên công việc
-            addChange(
-                'Tên công việc',
-                oldValues.title,
-                task.title
-            );
-
-            // So sánh mô tả
-            addChange(
-                'Mô tả',
-                oldValues.description,
-                task.description || ''
-            );
-
-            // So sánh ngày bắt đầu
-            if (
-                dateKey(oldValues.startDate) !==
-                dateKey(task.startDate)
-            ) {
-                changes.push({
-                    label: 'Ngày bắt đầu',
-                    oldValue: formatDate(oldValues.startDate),
-                    newValue: formatDate(task.startDate)
-                });
-            }
-
-            // So sánh hạn hoàn thành
-            if (
-                dateKey(oldValues.dueDate) !==
-                dateKey(task.dueDate)
-            ) {
-                changes.push({
-                    label: 'Hạn hoàn thành',
-                    oldValue: formatDate(oldValues.dueDate),
-                    newValue: formatDate(task.dueDate)
-                });
-            }
-
-            // So sánh độ ưu tiên
-            if (oldValues.priority !== task.priority) {
-                changes.push({
-                    label: 'Độ ưu tiên',
-                    oldValue: priorityLabels[oldValues.priority] || oldValues.priority,
-                    newValue: priorityLabels[task.priority] || task.priority
-                });
-            }
-
-            // Lưu thay đổi vào MongoDB trước
-            await task.save();
-
-            // D4: Chỉ gửi email khi trạng thái chuyển sang completed
-            let completedEmailSummary = null;
-
-            if (
-                oldStatus !== 'completed' &&
-                task.status === 'completed'
-            ) {
-                completedEmailSummary = await notifyTaskCompleted(
-                    task,
-                    req.user._id
-                );
-            }
-
-            // Chỉ gửi email khi có thông tin quan trọng thực sự thay đổi
-            if (changes.length > 0) {
-                // Lấy danh sách người được chia sẻ công việc
-                const shares = await TaskShare.find({
-                    taskId: id
-                }).select('userId');
-
-                // Gom ID người tạo, người được giao và người được chia sẻ
-                const recipientIds = new Set();
-
-                const creatorId = getObjectId(task.createdBy);
-
-                if (creatorId) {
-                    recipientIds.add(creatorId);
-                }
-
-                for (const assignee of task.assigneeIds || []) {
-                    const assigneeId = getObjectId(assignee);
-
-                    if (assigneeId) {
-                        recipientIds.add(assigneeId);
-                    }
-                }
-
-                for (const share of shares) {
-                    const sharedUserId = getObjectId(share.userId);
-
-                    if (sharedUserId) {
-                        recipientIds.add(sharedUserId);
-                    }
-                }
-
-                // Không gửi email cho chính người đang chỉnh sửa
-                recipientIds.delete(req.user._id.toString());
-
-                const recipients = await User.find({
-                    _id: { $in: [...recipientIds] }
-                }).select('fullName email');
-
-                const updater = await User.findById(req.user._id)
-                    .select('fullName email');
-
-                emailSummary.total = recipients.length;
-
-                // Gửi email cho từng người liên quan
-                for (const recipient of recipients) {
-                    try {
-                        const result = await sendTaskUpdateEmail({
-                            recipient,
-                            task,
-                            updater,
-                            changes
-                        });
-
-                        emailSummary.success.push(result || {
-                            email: recipient.email
-                        });
-
-                    } catch (emailError) {
-                        console.error(
-                            `Lỗi gửi email cập nhật đến ${recipient.email}:`,
-                            emailError.message
-                        );
-
-                        emailSummary.failed.push({
-                            email: recipient.email,
-                            error: emailError.message
-                        });
-                    }
-                }
-            }
-
-            // Lấy thông tin đầy đủ để trả về giao diện
-            await task.populate(
-                'createdBy',
-                'fullName email avatarUrl'
-            );
-
-            await task.populate(
-                'assigneeIds',
-                'fullName email avatarUrl'
-            );
-
-            await task.populate(
-                'primaryAssigneeId',
-                'fullName email avatarUrl'
-            );
-
-           return res.status(200).json({
-               message: 'Cập nhật công việc thành công!',
-               task,
-               emailSummary,
-               completedEmailSummary
-           });
-
-        } catch (error) {
-            console.error('Lỗi cập nhật công việc:', error);
-
-            return res.status(500).json({
-                message: 'Không thể cập nhật công việc!',
-                error: error.message
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: 'ID công việc không hợp lệ!'
             });
         }
-    };
+
+        const task = await Task.findById(id);
+
+        if (!task) {
+            return res.status(404).json({
+                message: 'Không tìm thấy công việc!'
+            });
+        }
+
+        const oldStatus = task.status;
+
+        if (!await canEditTask(task, req.user._id)) {
+            return res.status(403).json({
+                message: 'Bạn không có quyền chỉnh sửa công việc này!'
+            });
+        }
+
+        const {
+            title,
+            description,
+            startDate,
+            dueDate,
+            priority,
+            status
+        } = req.body;
+
+        const oldValues = {
+            title: task.title,
+            description: task.description || '',
+            startDate: task.startDate,
+            dueDate: task.dueDate,
+            priority: task.priority
+        };
+
+        if (title !== undefined) {
+            if (typeof title !== 'string' || !title.trim()) {
+                return res.status(400).json({
+                    message: 'Tên công việc không được để trống!'
+                });
+            }
+
+            task.title = title.trim();
+        }
+
+        if (description !== undefined) {
+            task.description = description;
+        }
+
+        if (startDate !== undefined) {
+            task.startDate = startDate || null;
+        }
+
+        if (dueDate !== undefined) {
+            task.dueDate = dueDate || null;
+        }
+
+        if (priority !== undefined) {
+            if (!['low', 'medium', 'high'].includes(priority)) {
+                return res.status(400).json({
+                    message: 'Mức độ ưu tiên không hợp lệ!'
+                });
+            }
+
+            task.priority = priority;
+        }
+
+        if (status !== undefined) {
+            if (!['todo', 'in_progress', 'completed'].includes(status)) {
+                return res.status(400).json({
+                    message: 'Trạng thái công việc không hợp lệ!'
+                });
+            }
+
+            task.status = status;
+        }
+
+        const dateKey = (value) => {
+            if (!value) return '';
+
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return String(value);
+            }
+
+            return date.toISOString();
+        };
+
+        const formatDate = (value) => {
+            if (!value) return 'Chưa thiết lập';
+
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return String(value);
+            }
+
+            return date.toLocaleDateString('vi-VN');
+        };
+
+        const priorityLabels = {
+            low: 'Thấp',
+            medium: 'Trung bình',
+            high: 'Cao'
+        };
+
+        const changes = [];
+
+        const addChange = (label, oldValue, newValue) => {
+            if (String(oldValue ?? '') !== String(newValue ?? '')) {
+                changes.push({
+                    label,
+                    oldValue: oldValue || 'Không có',
+                    newValue: newValue || 'Không có'
+                });
+            }
+        };
+
+        addChange('Tên công việc', oldValues.title, task.title);
+        addChange(
+            'Mô tả',
+            oldValues.description,
+            task.description || ''
+        );
+
+        if (dateKey(oldValues.startDate) !== dateKey(task.startDate)) {
+            changes.push({
+                label: 'Ngày bắt đầu',
+                oldValue: formatDate(oldValues.startDate),
+                newValue: formatDate(task.startDate)
+            });
+        }
+
+        if (dateKey(oldValues.dueDate) !== dateKey(task.dueDate)) {
+            changes.push({
+                label: 'Hạn hoàn thành',
+                oldValue: formatDate(oldValues.dueDate),
+                newValue: formatDate(task.dueDate)
+            });
+        }
+
+        if (oldValues.priority !== task.priority) {
+            changes.push({
+                label: 'Độ ưu tiên',
+                oldValue: priorityLabels[oldValues.priority] || oldValues.priority,
+                newValue: priorityLabels[task.priority] || task.priority
+            });
+        }
+
+        await task.save();
+
+        // E4: Ghi lịch sử chỉnh sửa thông tin
+        if (changes.length > 0) {
+            await logTaskActivity({
+                taskId: task._id,
+                userId: req.user._id,
+                action: 'updated',
+                description: `Đã cập nhật công việc "${task.title}"`,
+                details: { changes }
+            });
+        }
+
+        // E4: Ghi lịch sử thay đổi trạng thái
+        if (oldStatus !== task.status) {
+            await logTaskActivity({
+                taskId: task._id,
+                userId: req.user._id,
+                action: 'status_changed',
+                description: `Đã thay đổi trạng thái từ "${oldStatus}" sang "${task.status}"`,
+                details: {
+                    oldStatus,
+                    newStatus: task.status
+                }
+            });
+        }
+
+        // D4: Gửi email khi chuyển sang hoàn thành
+        let completedEmailSummary = null;
+
+        if (oldStatus !== 'completed' && task.status === 'completed') {
+            completedEmailSummary = await notifyTaskCompleted(
+                task,
+                req.user._id
+            );
+        }
+
+        // Khởi tạo kết quả email
+        const emailSummary = {
+            total: 0,
+            success: [],
+            failed: []
+        };
+
+        if (changes.length > 0) {
+            const shares = await TaskShare.find({
+                taskId: id
+            }).select('userId');
+
+            const recipientIds = new Set();
+
+            const creatorId = getObjectId(task.createdBy);
+
+            if (creatorId) recipientIds.add(creatorId);
+
+            for (const assignee of task.assigneeIds || []) {
+                const assigneeId = getObjectId(assignee);
+                if (assigneeId) recipientIds.add(assigneeId);
+            }
+
+            for (const share of shares) {
+                const sharedUserId = getObjectId(share.userId);
+                if (sharedUserId) recipientIds.add(sharedUserId);
+            }
+
+            recipientIds.delete(req.user._id.toString());
+
+            const recipients = await User.find({
+                _id: { $in: [...recipientIds] }
+            }).select('fullName email');
+
+            const updater = await User.findById(req.user._id)
+                .select('fullName email');
+
+            emailSummary.total = recipients.length;
+
+            for (const recipient of recipients) {
+                try {
+                    const result = await sendTaskUpdateEmail({
+                        recipient,
+                        task,
+                        updater,
+                        changes
+                    });
+
+                    emailSummary.success.push(result || {
+                        email: recipient.email
+                    });
+                } catch (emailError) {
+                    console.error(
+                        `Lỗi gửi email cập nhật đến ${recipient.email}:`,
+                        emailError.message
+                    );
+
+                    emailSummary.failed.push({
+                        email: recipient.email,
+                        error: emailError.message
+                    });
+                }
+            }
+        }
+
+        await task.populate(
+            'createdBy',
+            'fullName email avatarUrl'
+        );
+
+        await task.populate(
+            'assigneeIds',
+            'fullName email avatarUrl'
+        );
+
+        await task.populate(
+            'primaryAssigneeId',
+            'fullName email avatarUrl'
+        );
+
+        return res.status(200).json({
+            message: 'Cập nhật công việc thành công!',
+            task,
+            emailSummary,
+            completedEmailSummary
+        });
+    } catch (error) {
+        console.error('Lỗi cập nhật công việc:', error);
+
+        return res.status(500).json({
+            message: 'Không thể cập nhật công việc!',
+            error: error.message
+        });
+    }
+};
 
 // ============================
-// B5: XĂ“A CĂ”NG VIá»†C
+// B5: XÓA CÔNG VIỆC
 // ============================
 
 const deleteTask = async (req, res) => {
@@ -696,7 +676,7 @@ const deleteTask = async (req, res) => {
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
-                message: 'ID cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'ID công việc không hợp lệ!'
             });
         }
 
@@ -704,44 +684,37 @@ const deleteTask = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
-        // Chá»‰ ngÆ°á»i táº¡o má»›i Ä‘Æ°á»£c xĂ³a
         if (!isTaskOwner(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Chá»‰ ngÆ°á»i táº¡o cĂ´ng viá»‡c má»›i Ä‘Æ°á»£c xĂ³a!'
+                message: 'Chỉ người tạo công việc mới được xóa!'
             });
         }
 
         await Task.findByIdAndDelete(id);
-
-        // XĂ³a luĂ´n dá»¯ liá»‡u chia sáº» liĂªn quan
         await TaskShare.deleteMany({ taskId: id });
 
-        return res.status(200).json({
-            message: 'XĂ³a cĂ´ng viá»‡c thĂ nh cĂ´ng!'
-        });
+        // Xóa lịch sử liên quan khi xóa công việc
+        await TaskActivity.deleteMany({ taskId: id });
 
+        return res.status(200).json({
+            message: 'Xóa công việc thành công!'
+        });
     } catch (error) {
-        console.error('Lá»—i xĂ³a cĂ´ng viá»‡c:', error);
+        console.error('Lỗi xóa công việc:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ xĂ³a cĂ´ng viá»‡c!',
+            message: 'Không thể xóa công việc!',
             error: error.message
         });
     }
 };
 
 // ============================
-// B6: Cáº¬P NHáº¬T TRáº NG THĂI
-// ============================
-
-
-// ============================
 // B6 + D4: CẬP NHẬT TRẠNG THÁI
-// VÀ GỬI EMAIL KHI HOÀN THÀNH
 // ============================
 
 const updateTaskStatus = async (req, res) => {
@@ -781,28 +754,34 @@ const updateTaskStatus = async (req, res) => {
             });
         }
 
-        // Lưu trạng thái cũ
         const oldStatus = task.status;
 
-        // Cập nhật trạng thái mới
         task.status = status;
-
         await task.save();
 
-        // D4: Gửi email khi chuyển sang hoàn thành
+        // E4: Chỉ ghi lịch sử khi trạng thái thực sự thay đổi
+        if (oldStatus !== status) {
+            await logTaskActivity({
+                taskId: task._id,
+                userId: req.user._id,
+                action: 'status_changed',
+                description: `Đã thay đổi trạng thái từ "${oldStatus}" sang "${status}"`,
+                details: {
+                    oldStatus,
+                    newStatus: status
+                }
+            });
+        }
+
         let completedEmailSummary = null;
 
-        if (
-            oldStatus !== 'completed' &&
-            status === 'completed'
-        ) {
+        if (oldStatus !== 'completed' && status === 'completed') {
             completedEmailSummary = await notifyTaskCompleted(
                 task,
                 req.user._id
             );
         }
 
-        // Lấy thông tin đầy đủ
         await task.populate(
             'createdBy',
             'fullName email avatarUrl'
@@ -823,12 +802,8 @@ const updateTaskStatus = async (req, res) => {
             task,
             completedEmailSummary
         });
-
     } catch (error) {
-        console.error(
-            'Lỗi cập nhật trạng thái:',
-            error
-        );
+        console.error('Lỗi cập nhật trạng thái:', error);
 
         return res.status(500).json({
             message: 'Không thể cập nhật trạng thái!',
@@ -837,11 +812,9 @@ const updateTaskStatus = async (req, res) => {
     }
 };
 
-
 // ============================
-// C1: XEM NGÆ¯á»œI ÄÆ¯á»¢C GIAO
+// C1: XEM NGƯỜI ĐƯỢC GIAO
 // ============================
-
 
 const getTaskAssignees = async (req, res) => {
     try {
@@ -849,7 +822,7 @@ const getTaskAssignees = async (req, res) => {
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
-                message: 'ID cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'ID công việc không hợp lệ!'
             });
         }
 
@@ -860,38 +833,35 @@ const getTaskAssignees = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!await canViewTask(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Báº¡n khĂ´ng cĂ³ quyá»n xem cĂ´ng viá»‡c nĂ y!'
+                message: 'Bạn không có quyền xem công việc này!'
             });
         }
 
         return res.status(200).json({
-            message: 'Láº¥y danh sĂ¡ch ngÆ°á»i Ä‘Æ°á»£c giao thĂ nh cĂ´ng!',
+            message: 'Lấy danh sách người được giao thành công!',
             createdBy: task.createdBy,
             primaryAssignee: task.primaryAssigneeId,
             assignees: task.assigneeIds
         });
-
     } catch (error) {
-        console.error('Lá»—i láº¥y danh sĂ¡ch ngÆ°á»i Ä‘Æ°á»£c giao:', error);
+        console.error('Lỗi lấy danh sách người được giao:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ láº¥y danh sĂ¡ch ngÆ°á»i Ä‘Æ°á»£c giao!',
+            message: 'Không thể lấy danh sách người được giao!',
             error: error.message
         });
     }
 };
 
-
 // ============================
-// C1: GIAO CĂ”NG VIá»†C
+// C1: GIAO CÔNG VIỆC
 // ============================
-
 
 const assignTask = async (req, res) => {
     try {
@@ -900,13 +870,13 @@ const assignTask = async (req, res) => {
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
-                message: 'ID cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'ID công việc không hợp lệ!'
             });
         }
 
         if (!Array.isArray(userIds) || userIds.length === 0) {
             return res.status(400).json({
-                message: 'Vui lĂ²ng chá»n Ă­t nháº¥t má»™t ngÆ°á»i!'
+                message: 'Vui lòng chọn ít nhất một người!'
             });
         }
 
@@ -914,13 +884,13 @@ const assignTask = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!isTaskOwner(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Chá»‰ ngÆ°á»i táº¡o cĂ´ng viá»‡c má»›i Ä‘Æ°á»£c giao viá»‡c!'
+                message: 'Chỉ người tạo công việc mới được giao việc!'
             });
         }
 
@@ -930,7 +900,7 @@ const assignTask = async (req, res) => {
             !mongoose.Types.ObjectId.isValid(userId)
         )) {
             return res.status(400).json({
-                message: 'CĂ³ ID ngÆ°á»i dĂ¹ng khĂ´ng há»£p lá»‡!'
+                message: 'Có ID người dùng không hợp lệ!'
             });
         }
 
@@ -939,13 +909,13 @@ const assignTask = async (req, res) => {
             !mongoose.Types.ObjectId.isValid(primaryAssigneeId)
         ) {
             return res.status(400).json({
-                message: 'Vui lĂ²ng chá»n ngÆ°á»i phá»¥ trĂ¡ch chĂ­nh há»£p lá»‡!'
+                message: 'Vui lòng chọn người phụ trách chính hợp lệ!'
             });
         }
 
         if (!uniqueIds.includes(primaryAssigneeId.toString())) {
             return res.status(400).json({
-                message: 'NgÆ°á»i phá»¥ trĂ¡ch chĂ­nh pháº£i náº±m trong danh sĂ¡ch Ä‘Æ°á»£c giao!'
+                message: 'Người phụ trách chính phải nằm trong danh sách được giao!'
             });
         }
 
@@ -955,14 +925,43 @@ const assignTask = async (req, res) => {
 
         if (users.length !== uniqueIds.length) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y má»™t hoáº·c nhiá»u ngÆ°á»i dĂ¹ng!'
+                message: 'Không tìm thấy một hoặc nhiều người dùng!'
             });
         }
+
+        const oldAssigneeIds = (task.assigneeIds || []).map(
+            user => getObjectId(user)
+        );
+
+        const oldPrimaryAssigneeId = getObjectId(
+            task.primaryAssigneeId
+        );
 
         task.assigneeIds = uniqueIds;
         task.primaryAssigneeId = primaryAssigneeId;
 
         await task.save();
+
+        // E4: Ghi lịch sử giao việc khi có thay đổi
+        const assignmentChanged =
+            JSON.stringify([...oldAssigneeIds].sort()) !==
+                JSON.stringify([...uniqueIds].sort()) ||
+            oldPrimaryAssigneeId !== primaryAssigneeId.toString();
+
+        if (assignmentChanged) {
+            await logTaskActivity({
+                taskId: task._id,
+                userId: req.user._id,
+                action: 'assigned',
+                description: 'Đã cập nhật danh sách người được giao công việc',
+                details: {
+                    oldAssigneeIds,
+                    newAssigneeIds: uniqueIds,
+                    oldPrimaryAssigneeId,
+                    newPrimaryAssigneeId: primaryAssigneeId
+                }
+            });
+        }
 
         await task.populate(
             'assigneeIds',
@@ -975,34 +974,31 @@ const assignTask = async (req, res) => {
         );
 
         return res.status(200).json({
-            message: 'Giao cĂ´ng viá»‡c thĂ nh cĂ´ng!',
+            message: 'Giao công việc thành công!',
             assignees: task.assigneeIds,
             primaryAssignee: task.primaryAssigneeId
         });
-
     } catch (error) {
-        console.error('Lá»—i giao cĂ´ng viá»‡c:', error);
+        console.error('Lỗi giao công việc:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ giao cĂ´ng viá»‡c!',
+            message: 'Không thể giao công việc!',
             error: error.message
         });
     }
 };
 
-
 // ============================
-// C2: CHIA Sáºº CĂ”NG VIá»†C
+// C2.1: LẤY DANH SÁCH NGƯỜI ĐƯỢC CHIA SẺ
 // ============================
 
-// C2.1: Láº¥y danh sĂ¡ch ngÆ°á»i Ä‘Æ°á»£c chia sáº»
 const getTaskShares = async (req, res) => {
     try {
         const { id } = req.params;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
-                message: 'ID cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'ID công việc không hợp lệ!'
             });
         }
 
@@ -1010,13 +1006,13 @@ const getTaskShares = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!await canViewTask(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Báº¡n khĂ´ng cĂ³ quyá»n xem cĂ´ng viá»‡c nĂ y!'
+                message: 'Bạn không có quyền xem công việc này!'
             });
         }
 
@@ -1026,21 +1022,23 @@ const getTaskShares = async (req, res) => {
             .sort({ createdAt: -1 });
 
         return res.status(200).json({
-            message: 'Láº¥y danh sĂ¡ch chia sáº» thĂ nh cĂ´ng!',
+            message: 'Lấy danh sách chia sẻ thành công!',
             shares
         });
-
     } catch (error) {
-        console.error('Lá»—i láº¥y danh sĂ¡ch chia sáº»:', error);
+        console.error('Lỗi lấy danh sách chia sẻ:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ láº¥y danh sĂ¡ch chia sáº»!',
+            message: 'Không thể lấy danh sách chia sẻ!',
             error: error.message
         });
     }
 };
 
-// C2.2: Chia sáº» cĂ´ng viá»‡c cho má»™t hoáº·c nhiá»u ngÆ°á»i
+// ============================
+// C2.2: CHIA SẺ CÔNG VIỆC
+// ============================
+
 const shareTask = async (req, res) => {
     try {
         const { id } = req.params;
@@ -1048,19 +1046,19 @@ const shareTask = async (req, res) => {
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
-                message: 'ID cĂ´ng viá»‡c khĂ´ng há»£p lá»‡!'
+                message: 'ID công việc không hợp lệ!'
             });
         }
 
         if (!Array.isArray(userIds) || userIds.length === 0) {
             return res.status(400).json({
-                message: 'Vui lĂ²ng chá»n Ă­t nháº¥t má»™t ngÆ°á»i!'
+                message: 'Vui lòng chọn ít nhất một người!'
             });
         }
 
         if (!['viewer', 'editor'].includes(permission)) {
             return res.status(400).json({
-                message: 'Quyá»n chia sáº» khĂ´ng há»£p lá»‡!'
+                message: 'Quyền chia sẻ không hợp lệ!'
             });
         }
 
@@ -1068,13 +1066,13 @@ const shareTask = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!isTaskOwner(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Chá»‰ ngÆ°á»i táº¡o cĂ´ng viá»‡c má»›i Ä‘Æ°á»£c chia sáº»!'
+                message: 'Chỉ người tạo công việc mới được chia sẻ!'
             });
         }
 
@@ -1084,13 +1082,13 @@ const shareTask = async (req, res) => {
             !mongoose.Types.ObjectId.isValid(userId)
         )) {
             return res.status(400).json({
-                message: 'CĂ³ ID ngÆ°á»i dĂ¹ng khĂ´ng há»£p lá»‡!'
+                message: 'Có ID người dùng không hợp lệ!'
             });
         }
 
         if (uniqueIds.includes(req.user._id.toString())) {
             return res.status(400).json({
-                message: 'Báº¡n khĂ´ng thá»ƒ chia sáº» cĂ´ng viá»‡c cho chĂ­nh mĂ¬nh!'
+                message: 'Bạn không thể chia sẻ công việc cho chính mình!'
             });
         }
 
@@ -1100,11 +1098,16 @@ const shareTask = async (req, res) => {
 
         if (users.length !== uniqueIds.length) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y má»™t hoáº·c nhiá»u ngÆ°á»i dĂ¹ng!'
+                message: 'Không tìm thấy một hoặc nhiều người dùng!'
             });
         }
 
         for (const userId of uniqueIds) {
+            const existingShare = await TaskShare.findOne({
+                taskId: id,
+                userId
+            });
+
             await TaskShare.findOneAndUpdate(
                 {
                     taskId: id,
@@ -1126,6 +1129,32 @@ const shareTask = async (req, res) => {
                     runValidators: true
                 }
             );
+
+            // E4: Ghi lịch sử chia sẻ hoặc thay đổi quyền
+            if (!existingShare) {
+                await logTaskActivity({
+                    taskId: task._id,
+                    userId: req.user._id,
+                    action: 'shared',
+                    description: `Đã chia sẻ công việc cho người dùng ${userId} với quyền ${permission}`,
+                    details: {
+                        sharedUserId: userId,
+                        permission
+                    }
+                });
+            } else if (existingShare.permission !== permission) {
+                await logTaskActivity({
+                    taskId: task._id,
+                    userId: req.user._id,
+                    action: 'permission_updated',
+                    description: `Đã thay đổi quyền chia sẻ của người dùng ${userId} thành ${permission}`,
+                    details: {
+                        sharedUserId: userId,
+                        oldPermission: existingShare.permission,
+                        newPermission: permission
+                    }
+                });
+            }
         }
 
         const shares = await TaskShare.find({ taskId: id })
@@ -1134,21 +1163,23 @@ const shareTask = async (req, res) => {
             .sort({ createdAt: -1 });
 
         return res.status(200).json({
-            message: 'Chia sáº» cĂ´ng viá»‡c thĂ nh cĂ´ng!',
+            message: 'Chia sẻ công việc thành công!',
             shares
         });
-
     } catch (error) {
-        console.error('Lá»—i chia sáº» cĂ´ng viá»‡c:', error);
+        console.error('Lỗi chia sẻ công việc:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ chia sáº» cĂ´ng viá»‡c!',
+            message: 'Không thể chia sẻ công việc!',
             error: error.message
         });
     }
 };
 
-// C2.3: Thay Ä‘á»•i quyá»n chia sáº»
+// ============================
+// C2.3: THAY ĐỔI QUYỀN CHIA SẺ
+// ============================
+
 const updateTaskShare = async (req, res) => {
     try {
         const { id, shareId } = req.params;
@@ -1159,13 +1190,13 @@ const updateTaskShare = async (req, res) => {
             !mongoose.Types.ObjectId.isValid(shareId)
         ) {
             return res.status(400).json({
-                message: 'ID khĂ´ng há»£p lá»‡!'
+                message: 'ID không hợp lệ!'
             });
         }
 
         if (!['viewer', 'editor'].includes(permission)) {
             return res.status(400).json({
-                message: 'Quyá»n chia sáº» khĂ´ng há»£p lá»‡!'
+                message: 'Quyền chia sẻ không hợp lệ!'
             });
         }
 
@@ -1173,15 +1204,29 @@ const updateTaskShare = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!isTaskOwner(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Chá»‰ ngÆ°á»i táº¡o cĂ´ng viá»‡c má»›i Ä‘Æ°á»£c Ä‘á»•i quyá»n!'
+                message: 'Chỉ người tạo công việc mới được đổi quyền!'
             });
         }
+
+        const oldShare = await TaskShare.findOne({
+            _id: shareId,
+            taskId: id
+        });
+
+        if (!oldShare) {
+            return res.status(404).json({
+                message: 'Không tìm thấy thông tin chia sẻ!'
+            });
+        }
+
+        const oldPermission = oldShare.permission;
+        const sharedUserId = getObjectId(oldShare.userId);
 
         const share = await TaskShare.findOneAndUpdate(
             {
@@ -1199,28 +1244,39 @@ const updateTaskShare = async (req, res) => {
             .populate('userId', 'fullName email avatarUrl')
             .populate('sharedBy', 'fullName email avatarUrl');
 
-        if (!share) {
-            return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y thĂ´ng tin chia sáº»!'
+        // E4: Ghi lịch sử khi quyền thực sự thay đổi
+        if (oldPermission !== permission) {
+            await logTaskActivity({
+                taskId: task._id,
+                userId: req.user._id,
+                action: 'permission_updated',
+                description: `Đã thay đổi quyền chia sẻ từ ${oldPermission} thành ${permission}`,
+                details: {
+                    sharedUserId,
+                    oldPermission,
+                    newPermission: permission
+                }
             });
         }
 
         return res.status(200).json({
-            message: 'Cáº­p nháº­t quyá»n chia sáº» thĂ nh cĂ´ng!',
+            message: 'Cập nhật quyền chia sẻ thành công!',
             share
         });
-
     } catch (error) {
-        console.error('Lá»—i cáº­p nháº­t quyá»n chia sáº»:', error);
+        console.error('Lỗi cập nhật quyền chia sẻ:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ cáº­p nháº­t quyá»n chia sáº»!',
+            message: 'Không thể cập nhật quyền chia sẻ!',
             error: error.message
         });
     }
 };
 
-// C2.4: Thu há»“i quyá»n chia sáº»
+// ============================
+// C2.4: THU HỒI QUYỀN CHIA SẺ
+// ============================
+
 const removeTaskShare = async (req, res) => {
     try {
         const { id, shareId } = req.params;
@@ -1230,7 +1286,7 @@ const removeTaskShare = async (req, res) => {
             !mongoose.Types.ObjectId.isValid(shareId)
         ) {
             return res.status(400).json({
-                message: 'ID khĂ´ng há»£p lá»‡!'
+                message: 'ID không hợp lệ!'
             });
         }
 
@@ -1238,13 +1294,13 @@ const removeTaskShare = async (req, res) => {
 
         if (!task) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y cĂ´ng viá»‡c!'
+                message: 'Không tìm thấy công việc!'
             });
         }
 
         if (!isTaskOwner(task, req.user._id)) {
             return res.status(403).json({
-                message: 'Chá»‰ ngÆ°á»i táº¡o cĂ´ng viá»‡c má»›i Ä‘Æ°á»£c thu há»“i chia sáº»!'
+                message: 'Chỉ người tạo công việc mới được thu hồi chia sẻ!'
             });
         }
 
@@ -1255,19 +1311,78 @@ const removeTaskShare = async (req, res) => {
 
         if (!share) {
             return res.status(404).json({
-                message: 'KhĂ´ng tĂ¬m tháº¥y thĂ´ng tin chia sáº»!'
+                message: 'Không tìm thấy thông tin chia sẻ!'
             });
         }
 
-        return res.status(200).json({
-            message: 'Thu há»“i quyá»n chia sáº» thĂ nh cĂ´ng!'
+        // E4: Ghi lịch sử thu hồi quyền
+        await logTaskActivity({
+            taskId: task._id,
+            userId: req.user._id,
+            action: 'share_removed',
+            description: `Đã thu hồi quyền chia sẻ của người dùng ${getObjectId(share.userId)}`,
+            details: {
+                sharedUserId: getObjectId(share.userId),
+                oldPermission: share.permission
+            }
         });
 
+        return res.status(200).json({
+            message: 'Thu hồi quyền chia sẻ thành công!'
+        });
     } catch (error) {
-        console.error('Lá»—i thu há»“i chia sáº»:', error);
+        console.error('Lỗi thu hồi chia sẻ:', error);
 
         return res.status(500).json({
-            message: 'KhĂ´ng thá»ƒ thu há»“i quyá»n chia sáº»!',
+            message: 'Không thể thu hồi quyền chia sẻ!',
+            error: error.message
+        });
+    }
+};
+
+// ============================
+// E4: LẤY LỊCH SỬ HOẠT ĐỘNG
+// ============================
+
+const getTaskActivities = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: 'ID công việc không hợp lệ!'
+            });
+        }
+
+        const task = await Task.findById(id);
+
+        if (!task) {
+            return res.status(404).json({
+                message: 'Không tìm thấy công việc!'
+            });
+        }
+
+        if (!await canViewTask(task, req.user._id)) {
+            return res.status(403).json({
+                message: 'Bạn không có quyền xem lịch sử công việc này!'
+            });
+        }
+
+        const activities = await TaskActivity.find({
+            taskId: id
+        })
+            .populate('userId', 'fullName email avatarUrl')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            message: 'Lấy lịch sử hoạt động thành công!',
+            activities
+        });
+    } catch (error) {
+        console.error('E4: Lỗi lấy lịch sử hoạt động:', error);
+
+        return res.status(500).json({
+            message: 'Không thể lấy lịch sử hoạt động!',
             error: error.message
         });
     }
@@ -1287,12 +1402,11 @@ module.exports = {
     getTaskAssignees,
     assignTask,
 
-    // C2
     getTaskShares,
     shareTask,
     updateTaskShare,
     removeTaskShare,
 
-
+    // E4
+    getTaskActivities
 };
-

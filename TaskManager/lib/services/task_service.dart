@@ -1,5 +1,5 @@
-﻿
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,9 +32,7 @@ class TaskService {
     if (response.body.isEmpty) return {};
 
     try {
-      return Map<String, dynamic>.from(
-        jsonDecode(response.body),
-      );
+      return Map<String, dynamic>.from(jsonDecode(response.body));
     } catch (_) {
       throw Exception('Phản hồi từ máy chủ không hợp lệ!');
     }
@@ -55,9 +53,7 @@ class TaskService {
       return data['tasks'] ?? [];
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể tải danh sách công việc!',
-    );
+    throw Exception(data['message'] ?? 'Không thể tải danh sách công việc!');
   }
 
   // B2: Lấy chi tiết công việc
@@ -75,16 +71,14 @@ class TaskService {
       return Map<String, dynamic>.from(data['task']);
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể tải chi tiết công việc!',
-    );
+    throw Exception(data['message'] ?? 'Không thể tải chi tiết công việc!');
   }
 
   // B4: Chỉnh sửa công việc
   Future<Map<String, dynamic>> updateTask(
-      String taskId,
-      Map<String, dynamic> taskData,
-      ) async {
+    String taskId,
+    Map<String, dynamic> taskData,
+  ) async {
     final token = await _getToken();
 
     final response = await http.put(
@@ -99,9 +93,7 @@ class TaskService {
       return Map<String, dynamic>.from(data['task']);
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể cập nhật công việc!',
-    );
+    throw Exception(data['message'] ?? 'Không thể cập nhật công việc!');
   }
 
   // B5: Xóa công việc
@@ -113,8 +105,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    if (response.statusCode == 200 ||
-        response.statusCode == 204) {
+    if (response.statusCode == 200 || response.statusCode == 204) {
       return;
     }
 
@@ -132,16 +123,12 @@ class TaskService {
 
   // B6: Cập nhật trạng thái công việc
   Future<Map<String, dynamic>> updateTaskStatus(
-      String taskId,
-      String status,
-      ) async {
+    String taskId,
+    String status,
+  ) async {
     final token = await _getToken();
 
-    const allowedStatuses = [
-      'todo',
-      'in_progress',
-      'completed',
-    ];
+    const allowedStatuses = ['todo', 'in_progress', 'completed'];
 
     if (!allowedStatuses.contains(status)) {
       throw Exception('Trạng thái công việc không hợp lệ!');
@@ -172,10 +159,7 @@ class TaskService {
       '$usersBaseUrl/search?q=${Uri.encodeQueryComponent(query)}',
     );
 
-    final response = await http.get(
-      uri,
-      headers: _headers(token),
-    );
+    final response = await http.get(uri, headers: _headers(token));
 
     final data = _decodeResponse(response);
 
@@ -183,17 +167,15 @@ class TaskService {
       return data['users'] ?? [];
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể tìm người dùng!',
-    );
+    throw Exception(data['message'] ?? 'Không thể tìm người dùng!');
   }
 
   // C1 + C2 + D1: Giao công việc và gửi email
   Future<Map<String, dynamic>> assignTask(
-      String taskId,
-      List<String> userIds,
-      String primaryAssigneeId,
-      ) async {
+    String taskId,
+    List<String> userIds,
+    String primaryAssigneeId,
+  ) async {
     final token = await _getToken();
 
     // Loại bỏ ID trùng lặp
@@ -221,22 +203,17 @@ class TaskService {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode == 200 ||
-        response.statusCode == 201) {
+    if (response.statusCode == 200 || response.statusCode == 201) {
       return data;
     }
 
     throw Exception(
-      data['message'] ??
-          data['error'] ??
-          'Giao công việc thất bại!',
+      data['message'] ?? data['error'] ?? 'Giao công việc thất bại!',
     );
   }
 
   // C1 + C5: Lấy thông tin người được giao
-  Future<Map<String, dynamic>> getTaskAssignees(
-      String taskId,
-      ) async {
+  Future<Map<String, dynamic>> getTaskAssignees(String taskId) async {
     final token = await _getToken();
 
     final response = await http.get(
@@ -270,9 +247,7 @@ class TaskService {
       return data['shares'] ?? [];
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể lấy danh sách chia sẻ!',
-    );
+    throw Exception(data['message'] ?? 'Không thể lấy danh sách chia sẻ!');
   }
 
   // C5: Lấy toàn bộ danh sách thành viên công việc
@@ -291,10 +266,10 @@ class TaskService {
   // C3: Chia sẻ công việc
   // permission: viewer hoặc editor
   Future<Map<String, dynamic>> shareTask(
-      String taskId,
-      List<String> userIds,
-      String permission,
-      ) async {
+    String taskId,
+    List<String> userIds,
+    String permission,
+  ) async {
     final token = await _getToken();
 
     if (!['viewer', 'editor'].contains(permission)) {
@@ -304,30 +279,24 @@ class TaskService {
     final response = await http.post(
       Uri.parse('$baseUrl/$taskId/shares'),
       headers: _headers(token),
-      body: jsonEncode({
-        'userIds': userIds,
-        'permission': permission,
-      }),
+      body: jsonEncode({'userIds': userIds, 'permission': permission}),
     );
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode == 200 ||
-        response.statusCode == 201) {
+    if (response.statusCode == 200 || response.statusCode == 201) {
       return data;
     }
 
-    throw Exception(
-      data['message'] ?? 'Chia sẻ công việc thất bại!',
-    );
+    throw Exception(data['message'] ?? 'Chia sẻ công việc thất bại!');
   }
 
   // C4: Thay đổi quyền chia sẻ
   Future<Map<String, dynamic>> updateSharePermission(
-      String taskId,
-      String shareId,
-      String permission,
-      ) async {
+    String taskId,
+    String shareId,
+    String permission,
+  ) async {
     final token = await _getToken();
 
     if (!['viewer', 'editor'].contains(permission)) {
@@ -337,9 +306,7 @@ class TaskService {
     final response = await http.patch(
       Uri.parse('$baseUrl/$taskId/shares/$shareId'),
       headers: _headers(token),
-      body: jsonEncode({
-        'permission': permission,
-      }),
+      body: jsonEncode({'permission': permission}),
     );
 
     final data = _decodeResponse(response);
@@ -348,16 +315,11 @@ class TaskService {
       return data;
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể thay đổi quyền!',
-    );
+    throw Exception(data['message'] ?? 'Không thể thay đổi quyền!');
   }
 
   // C4: Thu hồi quyền chia sẻ
-  Future<void> removeTaskShare(
-      String taskId,
-      String shareId,
-      ) async {
+  Future<void> removeTaskShare(String taskId, String shareId) async {
     final token = await _getToken();
 
     final response = await http.delete(
@@ -365,8 +327,7 @@ class TaskService {
       headers: _headers(token),
     );
 
-    if (response.statusCode == 200 ||
-        response.statusCode == 204) {
+    if (response.statusCode == 200 || response.statusCode == 204) {
       return;
     }
 
@@ -397,9 +358,26 @@ class TaskService {
       return List<dynamic>.from(data['logs'] ?? []);
     }
 
-    throw Exception(
-      data['message'] ?? 'Không thể tải lịch sử gửi email!',
-    );
+    throw Exception(data['message'] ?? 'Không thể tải lịch sử gửi email!');
   }
 
+  // E4: Lấy lịch sử hoạt động của công việc
+  Future<List<dynamic>> getTaskActivities(String taskId) async {
+    final token = await _getToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/$taskId/activities'),
+      headers: _headers(token),
+    );
+
+    final data = _decodeResponse(response);
+
+    if (response.statusCode == 200) {
+      return List<dynamic>.from(data['activities'] ?? []);
+    }
+
+    throw Exception(
+      data['message'] ?? 'Không thể tải lịch sử hoạt động công việc!',
+    );
+  }
 }

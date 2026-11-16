@@ -16,7 +16,8 @@ const {
     getTaskShares,
     shareTask,
     updateTaskShare,
-    removeTaskShare
+    removeTaskShare,
+    getTaskActivities
 } = require('../controllers/taskController');
 
 // B: Tạo công việc
@@ -46,5 +47,8 @@ router.get('/:id/shares', authMiddleware, getTaskShares);
 router.post('/:id/shares', authMiddleware, shareTask);
 router.patch('/:id/shares/:shareId', authMiddleware, updateTaskShare);
 router.delete('/:id/shares/:shareId', authMiddleware, removeTaskShare);
+
+// E4: Lịch sử hoạt động công việc
+router.get('/:id/activities', authMiddleware, getTaskActivities);
 
 module.exports = router;
