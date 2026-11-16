@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import 'task_detail_screen.dart';
@@ -103,28 +102,74 @@ class _TaskListScreenState extends State<TaskListScreen> {
   // THÊM CÔNG VIỆC
   // ============================
 
+  // ============================
+  // THÊM CÔNG VIỆC
+  // ============================
+
+  // ============================
+  // THÊM CÔNG VIỆC
+  // ============================
+
   Future<void> openAddTask() async {
-    await Navigator.push(
+    final taskData = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (context) => const AddTaskScreen()),
     );
 
-    if (mounted) await loadTasks();
+    if (!mounted || taskData == null) return;
+
+    try {
+      await _taskService.createTask(taskData);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thêm công việc thành công!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      await loadTasks();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Thêm công việc thất bại: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // ============================
   // GIAO VIỆC C1
   // ============================
 
+  // ============================
+  // GIAO VIỆC C1
+  // ============================
+
   Future<void> openAssignTask(String taskId) async {
-    await Navigator.push(
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (context) => AssignTaskScreen(taskId: taskId)),
     );
 
-    if (mounted) await loadTasks();
-  }
+    if (!mounted) return;
 
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Giao công việc thành công!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+
+    await loadTasks();
+  }
   // ============================
   // CHUYỂN TRẠNG THÁI
   // ============================
@@ -455,9 +500,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
         final hasAssignee =
             assignees is List &&
-                assignees.any((user) {
-                  return getAssigneeId(user) == assigneeFilter;
-                });
+            assignees.any((user) {
+              return getAssigneeId(user) == assigneeFilter;
+            });
 
         return primaryId == assigneeFilter || hasAssignee;
       }).toList();
@@ -623,14 +668,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
         prefixIcon: const Icon(Icons.search),
         suffixIcon: searchQuery.isNotEmpty
             ? IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () {
-            searchController.clear();
-            setState(() {
-              searchQuery = '';
-            });
-          },
-        )
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  searchController.clear();
+                  setState(() {
+                    searchQuery = '';
+                  });
+                },
+              )
             : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -1037,70 +1082,70 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
           ? Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.red,
-                size: 45,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 45,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: loadTasks,
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(errorMessage!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: loadTasks,
-                child: const Text('Thử lại'),
-              ),
-            ],
-          ),
-        ),
-      )
+            )
           : RefreshIndicator(
-        onRefresh: loadTasks,
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            searchSection(),
-            const SizedBox(height: 12),
+              onRefresh: loadTasks,
+              child: ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  searchSection(),
+                  const SizedBox(height: 12),
 
-            filterSection(),
-            const SizedBox(height: 12),
+                  filterSection(),
+                  const SizedBox(height: 12),
 
-            sortSection(),
-            const SizedBox(height: 16),
+                  sortSection(),
+                  const SizedBox(height: 16),
 
-            Text(
-              'Tìm thấy ${displayedTasks.length} công việc',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple,
+                  Text(
+                    'Tìm thấy ${displayedTasks.length} công việc',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  if (displayedTasks.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(30),
+                      child: Center(
+                        child: Text(
+                          'Không tìm thấy công việc phù hợp!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey, fontSize: 15),
+                        ),
+                      ),
+                    )
+                  else
+                    ...displayedTasks.map((item) {
+                      final task = Map<String, dynamic>.from(item);
+                      return taskCard(task);
+                    }),
+                ],
               ),
             ),
-
-            const SizedBox(height: 8),
-
-            if (displayedTasks.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(30),
-                child: Center(
-                  child: Text(
-                    'Không tìm thấy công việc phù hợp!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 15),
-                  ),
-                ),
-              )
-            else
-              ...displayedTasks.map((item) {
-                final task = Map<String, dynamic>.from(item);
-                return taskCard(task);
-              }),
-          ],
-        ),
-      ),
     );
   }
 }

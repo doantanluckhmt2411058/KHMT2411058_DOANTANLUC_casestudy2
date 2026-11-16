@@ -56,6 +56,25 @@ class TaskService {
     throw Exception(data['message'] ?? 'Không thể tải danh sách công việc!');
   }
 
+  // B: Tạo công việc
+  Future<Map<String, dynamic>> createTask(Map<String, dynamic> taskData) async {
+    final token = await _getToken();
+
+    final response = await http.post(
+      Uri.parse(baseUrl),
+      headers: _headers(token),
+      body: jsonEncode(taskData),
+    );
+
+    final data = _decodeResponse(response);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return Map<String, dynamic>.from(data['task']);
+    }
+
+    throw Exception(data['message'] ?? 'Không thể tạo công việc!');
+  }
+
   // B2: Lấy chi tiết công việc
   Future<Map<String, dynamic>> getTaskById(String taskId) async {
     final token = await _getToken();
