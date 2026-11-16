@@ -7,6 +7,7 @@ import 'assign_task_screen.dart';
 import 'email_history_screen.dart';
 import '../services/task_service.dart';
 import 'notification_screen.dart';
+import 'statistics_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -40,6 +41,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  void openStatistics() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => StatisticsScreen(tasks: tasks)),
+    );
   }
 
   // Tải danh sách công việc
@@ -772,6 +780,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 MaterialPageRoute(builder: (_) => const EmailHistoryScreen()),
               );
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Thống kê công việc',
+            onPressed: openStatistics,
           ),
         ],
       ),
