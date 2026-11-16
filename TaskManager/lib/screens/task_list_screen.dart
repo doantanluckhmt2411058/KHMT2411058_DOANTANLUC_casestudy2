@@ -1,6 +1,6 @@
+
 import 'package:flutter/material.dart';
 
-import 'reminder_settings_screen.dart';
 import 'task_detail_screen.dart';
 import 'add_task_screen.dart';
 import 'assign_task_screen.dart';
@@ -31,6 +31,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   String assigneeFilter = 'all';
   String sortBy = 'createdAt';
 
+  // Bộ lọc hạn hoàn thành D3
+  String deadlineFilter = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +46,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     super.dispose();
   }
 
+  // ============================
+  // THỐNG KÊ E1 - E2
+  // ============================
+
   void openStatistics() {
     Navigator.push(
       context,
@@ -50,7 +57,21 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Tải danh sách công việc
+  // ============================
+  // D7 - THÔNG BÁO
+  // ============================
+
+  Future<void> openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => NotificationScreen(tasks: tasks)),
+    );
+  }
+
+  // ============================
+  // TẢI DANH SÁCH CÔNG VIỆC
+  // ============================
+
   Future<void> loadTasks() async {
     if (!mounted) return;
 
@@ -78,15 +99,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Mở màn hình thông báo D7
-  Future<void> openNotifications() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => NotificationScreen(tasks: tasks)),
-    );
-  }
+  // ============================
+  // THÊM CÔNG VIỆC
+  // ============================
 
-  // Mở màn hình thêm công việc
   Future<void> openAddTask() async {
     await Navigator.push(
       context,
@@ -96,7 +112,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     if (mounted) await loadTasks();
   }
 
-  // Mở màn hình giao việc C1
+  // ============================
+  // GIAO VIỆC C1
+  // ============================
+
   Future<void> openAssignTask(String taskId) async {
     await Navigator.push(
       context,
@@ -106,7 +125,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     if (mounted) await loadTasks();
   }
 
-  // Chuyển trạng thái sang tiếng Việt
+  // ============================
+  // CHUYỂN TRẠNG THÁI
+  // ============================
+
   String statusText(String? status) {
     switch (status) {
       case 'todo':
@@ -120,7 +142,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Chuyển mức độ ưu tiên sang tiếng Việt
+  // ============================
+  // CHUYỂN MỨC ƯU TIÊN
+  // ============================
+
   String priorityText(String? priority) {
     switch (priority) {
       case 'low':
@@ -134,7 +159,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Lấy tên người phụ trách
+  // ============================
+  // LẤY TÊN NGƯỜI PHỤ TRÁCH
+  // ============================
+
   String getAssigneeName(dynamic user) {
     if (user == null) return 'Chưa phân công';
 
@@ -145,7 +173,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return user.toString();
   }
 
-  // Lấy ID người phụ trách
+  // ============================
+  // LẤY ID NGƯỜI PHỤ TRÁCH
+  // ============================
+
   String getAssigneeId(dynamic user) {
     if (user == null) return '';
 
@@ -156,7 +187,115 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return user.toString();
   }
 
-  // Hiển thị vai trò người dùng
+  // ============================
+  // D3 - KIỂM TRA HẠN HOÀN THÀNH
+  // ============================
+
+  DateTime? getDueDay(dynamic dueDate) {
+    if (dueDate == null) return null;
+
+    final parsed = DateTime.tryParse(dueDate.toString());
+    if (parsed == null) return null;
+
+    final localDate = parsed.isUtc ? parsed.toLocal() : parsed;
+
+    return DateTime(localDate.year, localDate.month, localDate.day);
+  }
+
+  // Công việc sắp đến hạn trong 3 ngày tới
+  bool isUpcomingTask(Map<String, dynamic> task) {
+    if (task['status']?.toString() == 'completed') return false;
+
+    final dueDay = getDueDay(task['dueDate']);
+    if (dueDay == null) return false;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lastDay = today.add(const Duration(days: 3));
+
+    return !dueDay.isBefore(today) && !dueDay.isAfter(lastDay);
+  }
+
+  // Công việc đã quá hạn
+  bool isOverdueTask(Map<String, dynamic> task) {
+    if (task['status']?.toString() == 'completed') return false;
+
+    final dueDay = getDueDay(task['dueDate']);
+    if (dueDay == null) return false;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return dueDay.isBefore(today);
+  }
+
+  // Đếm công việc sắp đến hạn
+  int get upcomingTaskCount {
+    return tasks.where((task) {
+      return task is Map && isUpcomingTask(Map<String, dynamic>.from(task));
+    }).length;
+  }
+
+  // Đếm công việc quá hạn
+  int get overdueTaskCount {
+    return tasks.where((task) {
+      return task is Map && isOverdueTask(Map<String, dynamic>.from(task));
+    }).length;
+  }
+
+  // Hiển thị nhãn cảnh báo hạn hoàn thành
+  Widget deadlineBadge(Map<String, dynamic> task) {
+    if (isOverdueTask(task)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.red.shade700,
+              size: 18,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              'ĐÃ QUÁ HẠN',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isUpcomingTask(task)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          children: [
+            Icon(Icons.schedule, color: Colors.orange.shade800, size: 18),
+            const SizedBox(width: 5),
+            Text(
+              'SẮP ĐẾN HẠN',
+              style: TextStyle(
+                color: Colors.orange.shade800,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  // ============================
+  // HIỂN THỊ VAI TRÒ NGƯỜI DÙNG
+  // ============================
+
   Widget roleBadges(Map<String, dynamic> task) {
     final roles = task['myRoles'];
 
@@ -194,15 +333,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
         );
       }).toList(),
     );
-    Future<void> openNotifications() async {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => NotificationScreen(tasks: tasks)),
-      );
-    }
   }
 
-  // Hiển thị quyền chia sẻ
+  // ============================
+  // HIỂN THỊ QUYỀN CHIA SẺ
+  // ============================
+
   Widget sharePermissionBadge(Map<String, dynamic> task) {
     final permission = task['mySharePermission']?.toString();
 
@@ -237,7 +373,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Hiển thị tiến độ công việc
+  // ============================
+  // HIỂN THỊ TIẾN ĐỘ CÔNG VIỆC
+  // ============================
+
   Widget progressSection(Map<String, dynamic> task) {
     final rawProgress = task['progress'];
     final progress = rawProgress is num
@@ -279,10 +418,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Tìm kiếm, lọc và sắp xếp
+  // ============================
+  // TÌM KIẾM, LỌC VÀ SẮP XẾP
+  // ============================
+
   List<dynamic> get filteredTasks {
     List<dynamic> result = List<dynamic>.from(tasks);
 
+    // Tìm kiếm theo tên công việc
     if (searchQuery.trim().isNotEmpty) {
       result = result.where((task) {
         final title = task['title']?.toString().toLowerCase() ?? '';
@@ -290,18 +433,21 @@ class _TaskListScreenState extends State<TaskListScreen> {
       }).toList();
     }
 
+    // Lọc trạng thái
     if (statusFilter != 'all') {
       result = result.where((task) {
         return task['status']?.toString() == statusFilter;
       }).toList();
     }
 
+    // Lọc mức độ ưu tiên
     if (priorityFilter != 'all') {
       result = result.where((task) {
         return task['priority']?.toString() == priorityFilter;
       }).toList();
     }
 
+    // Lọc người phụ trách
     if (assigneeFilter != 'all') {
       result = result.where((task) {
         final primaryId = getAssigneeId(task['primaryAssigneeId']);
@@ -309,14 +455,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
         final hasAssignee =
             assignees is List &&
-            assignees.any((user) {
-              return getAssigneeId(user) == assigneeFilter;
-            });
+                assignees.any((user) {
+                  return getAssigneeId(user) == assigneeFilter;
+                });
 
         return primaryId == assigneeFilter || hasAssignee;
       }).toList();
     }
 
+    // D3 - Lọc theo hạn hoàn thành
+    if (deadlineFilter == 'upcoming') {
+      result = result.where((task) {
+        return isUpcomingTask(Map<String, dynamic>.from(task));
+      }).toList();
+    } else if (deadlineFilter == 'overdue') {
+      result = result.where((task) {
+        return isOverdueTask(Map<String, dynamic>.from(task));
+      }).toList();
+    }
+
+    // Sắp xếp công việc
     result.sort((a, b) {
       switch (sortBy) {
         case 'dueDate':
@@ -353,7 +511,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return result;
   }
 
-  // Lấy danh sách người phụ trách để lọc
+  // ============================
+  // DANH SÁCH NGƯỜI PHỤ TRÁCH ĐỂ LỌC
+  // ============================
+
   List<Map<String, String>> get assigneeOptions {
     final Map<String, String> uniqueUsers = {};
 
@@ -390,7 +551,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .toList();
   }
 
-  // Xóa toàn bộ bộ lọc
+  // ============================
+  // ĐẶT LẠI BỘ LỌC
+  // ============================
+
   void resetFilters() {
     setState(() {
       searchController.clear();
@@ -398,11 +562,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
       statusFilter = 'all';
       priorityFilter = 'all';
       assigneeFilter = 'all';
+      deadlineFilter = 'all';
       sortBy = 'createdAt';
     });
   }
 
-  // Mở chi tiết công việc
+  // ============================
+  // MỞ CHI TIẾT CÔNG VIỆC
+  // ============================
+
   Future<void> openTaskDetail(Map<String, dynamic> task) async {
     final id = task['_id']?.toString();
 
@@ -443,7 +611,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Giao diện tìm kiếm
+  // ============================
+  // GIAO DIỆN TÌM KIẾM
+  // ============================
+
   Widget searchSection() {
     return TextField(
       controller: searchController,
@@ -452,14 +623,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
         prefixIcon: const Icon(Icons.search),
         suffixIcon: searchQuery.isNotEmpty
             ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  searchController.clear();
-                  setState(() {
-                    searchQuery = '';
-                  });
-                },
-              )
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            searchController.clear();
+            setState(() {
+              searchQuery = '';
+            });
+          },
+        )
             : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -471,7 +642,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Giao diện lọc
+  // ============================
+  // GIAO DIỆN LỌC CÔNG VIỆC
+  // ============================
+
   Widget filterSection() {
     return Card(
       elevation: 1,
@@ -574,6 +748,54 @@ class _TaskListScreenState extends State<TaskListScreen> {
               },
             ),
 
+            const SizedBox(height: 16),
+
+            const Text(
+              'HẠN HOÀN THÀNH',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.deepPurple,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('Tất cả'),
+                  selected: deadlineFilter == 'all',
+                  onSelected: (_) {
+                    setState(() {
+                      deadlineFilter = 'all';
+                    });
+                  },
+                ),
+                ChoiceChip(
+                  label: Text('Sắp đến hạn ($upcomingTaskCount)'),
+                  selected: deadlineFilter == 'upcoming',
+                  selectedColor: Colors.orange.shade100,
+                  onSelected: (_) {
+                    setState(() {
+                      deadlineFilter = 'upcoming';
+                    });
+                  },
+                ),
+                ChoiceChip(
+                  label: Text('Quá hạn ($overdueTaskCount)'),
+                  selected: deadlineFilter == 'overdue',
+                  selectedColor: Colors.red.shade100,
+                  onSelected: (_) {
+                    setState(() {
+                      deadlineFilter = 'overdue';
+                    });
+                  },
+                ),
+              ],
+            ),
+
             const SizedBox(height: 12),
 
             Align(
@@ -590,7 +812,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Giao diện sắp xếp
+  // ============================
+  // GIAO DIỆN SẮP XẾP
+  // ============================
+
   Widget sortSection() {
     return Row(
       children: [
@@ -630,7 +855,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Thẻ công việc
+  // ============================
+  // THẺ CÔNG VIỆC
+  // ============================
+
   Widget taskCard(Map<String, dynamic> task) {
     final taskId = task['_id']?.toString() ?? '';
 
@@ -673,6 +901,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
               Text(
                 'Hạn hoàn thành: ${task['dueDate'].toString().substring(0, 10)}',
               ),
+
+            // D3 - Nhãn cảnh báo hạn
+            deadlineBadge(task),
 
             progressSection(task),
 
@@ -731,6 +962,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
+  // ============================
+  // GIAO DIỆN CHÍNH
+  // ============================
+
   @override
   Widget build(BuildContext context) {
     final displayedTasks = filteredTasks;
@@ -781,6 +1016,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               );
             },
           ),
+
           IconButton(
             icon: const Icon(Icons.bar_chart),
             tooltip: 'Thống kê công việc',
@@ -788,6 +1024,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: openAddTask,
         backgroundColor: Colors.deepPurple,
@@ -800,68 +1037,70 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
           ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 45,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(errorMessage!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: loadTasks,
-                      child: const Text('Thử lại'),
-                    ),
-                  ],
-                ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 45,
               ),
-            )
+              const SizedBox(height: 12),
+              Text(errorMessage!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: loadTasks,
+                child: const Text('Thử lại'),
+              ),
+            ],
+          ),
+        ),
+      )
           : RefreshIndicator(
-              onRefresh: loadTasks,
-              child: ListView(
-                padding: const EdgeInsets.all(12),
-                children: [
-                  searchSection(),
-                  const SizedBox(height: 12),
-                  filterSection(),
-                  const SizedBox(height: 12),
-                  sortSection(),
-                  const SizedBox(height: 16),
+        onRefresh: loadTasks,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            searchSection(),
+            const SizedBox(height: 12),
 
-                  Text(
-                    'Tìm thấy ${displayedTasks.length} công việc',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
-                  ),
+            filterSection(),
+            const SizedBox(height: 12),
 
-                  const SizedBox(height: 8),
+            sortSection(),
+            const SizedBox(height: 16),
 
-                  if (displayedTasks.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Center(
-                        child: Text(
-                          'Không tìm thấy công việc phù hợp!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey, fontSize: 15),
-                        ),
-                      ),
-                    )
-                  else
-                    ...displayedTasks.map((item) {
-                      final task = Map<String, dynamic>.from(item);
-                      return taskCard(task);
-                    }),
-                ],
+            Text(
+              'Tìm thấy ${displayedTasks.length} công việc',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.deepPurple,
               ),
             ),
+
+            const SizedBox(height: 8),
+
+            if (displayedTasks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(30),
+                child: Center(
+                  child: Text(
+                    'Không tìm thấy công việc phù hợp!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 15),
+                  ),
+                ),
+              )
+            else
+              ...displayedTasks.map((item) {
+                final task = Map<String, dynamic>.from(item);
+                return taskCard(task);
+              }),
+          ],
+        ),
+      ),
     );
   }
 }
