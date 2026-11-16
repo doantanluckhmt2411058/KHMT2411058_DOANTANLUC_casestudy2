@@ -6,6 +6,7 @@ import 'add_task_screen.dart';
 import 'assign_task_screen.dart';
 import 'email_history_screen.dart';
 import '../services/task_service.dart';
+import 'notification_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -67,6 +68,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
         isLoading = false;
       });
     }
+  }
+
+  // Mở màn hình thông báo D7
+  Future<void> openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => NotificationScreen(tasks: tasks)),
+    );
   }
 
   // Mở màn hình thêm công việc
@@ -177,6 +186,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
         );
       }).toList(),
     );
+    Future<void> openNotifications() async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => NotificationScreen(tasks: tasks)),
+      );
+    }
   }
 
   // Hiển thị quyền chia sẻ
@@ -719,17 +734,35 @@ class _TaskListScreenState extends State<TaskListScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_active),
-            tooltip: 'Cài đặt nhắc việc',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ReminderSettingsScreen(),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications),
+                Positioned(
+                  right: -5,
+                  top: -5,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Text(
+                      '!',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
-              );
-            },
+              ],
+            ),
+            tooltip: 'Thông báo',
+            onPressed: openNotifications,
           ),
+
           IconButton(
             icon: const Icon(Icons.email),
             tooltip: 'Lịch sử gửi email',
